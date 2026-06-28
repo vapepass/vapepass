@@ -8,7 +8,6 @@ import AuthLayout from '@/components/AuthLayout';
 import GuestGuard from '@/components/GuestGuard';
 import Button from '@/components/ui/Button';
 import { Input, FormField, InputGroup, InputIcon, InputToggle } from '@/components/ui/Input';
-import GoogleIcon from '@/components/GoogleIcon';
 import { useAuth } from '@/context/AuthContext';
 import { ApiError, fieldErrorsToMap } from '@/lib/api';
 
@@ -213,19 +212,6 @@ export default function Register() {
 
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? 'Creating account…' : 'Create Account'}
-          </Button>
-
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center" aria-hidden="true">
-              <div className="w-full border-t border-line" />
-            </div>
-            <div className="relative flex justify-center text-xs">
-              <span className="bg-surface px-3 text-muted">or continue with</span>
-            </div>
-          </div>
-
-          <Button type="button" variant="secondary" className="w-full" disabled>
-            <GoogleIcon /> Google
           </Button>
 
           <p className="text-center text-sm text-body pt-2">
