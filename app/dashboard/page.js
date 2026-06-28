@@ -1,10 +1,15 @@
 'use client';
+import { useEffect, useState } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import PageHeader from '@/components/ui/PageHeader';
 import { Card, CardTitle, CardDescription } from '@/components/ui/Card';
-import { mockCustomers, mockActivity, mockGrowth, mockActivity2 } from '@/data/mock';
 import { Users, Wallet, Gift, TrendingUp, Stamp, UserPlus, Award, Key, ArrowUpRight } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { useAuth } from '@/context/AuthContext';
+import { getCustomerStats } from '@/lib/customer-api';
+import { getActivity } from '@/lib/activity-api';
+import { getDashboardAnalytics } from '@/lib/analytics-api';
+import { mapActivity } from '@/lib/mappers';
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload?.length) {
@@ -75,20 +80,37 @@ function ActivityItem({ item }) {
 }
 
 export default function Dashboard() {
-  const rewarded = mockCustomers.filter((c) => c.status === 'rewarded').length;
+  const { store } = useAuth();
+  const [stats, setStats] = useState({ total: 0, active: 0, rewarded: 0 });
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [growth, setGrowth] = useState([]);
+  const [loyalty, setLoyalty] = useState([]);
+
+  useEffect(() => {
+    getCustomerStats().then(setStats).catch(() => {});
+    getActivity({ limit: 6 })
+      .then((data) => setRecentActivity(data.activities.map(mapActivity)))
+      .catch(() => {});
+    getDashboardAnalytics()
+      .then((data) => {
+        setGrowth(data.growth || []);
+        setLoyalty(data.loyalty || []);
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <DashboardLayout>
       <PageHeader
         title="Dashboard"
-        description="Here's what's happening at Cloud Nine Vapes"
+        description={store?.name ? `Here's what's happening at ${store.name}` : "Here's what's happening at your store"}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-        <StatCard icon={Users} label="Total Customers" value={mockCustomers.length} change="+12" color="#7c3aed" />
-        <StatCard icon={Wallet} label="Active Passes" value={mockCustomers.filter((c) => c.status === 'active').length} change="+8" color="#3b82f6" />
-        <StatCard icon={Gift} label="Rewards Redeemed" value={rewarded} change="+3" color="#f59e0b" />
-        <StatCard icon={TrendingUp} label="Monthly Revenue" value="$29" color="#10b981" />
+        <StatCard icon={Users} label="Total Customers" value={stats.total} color="#7c3aed" />
+        <StatCard icon={Wallet} label="Active Passes" value={stats.active} color="#3b82f6" />
+        <StatCard icon={Gift} label="Rewards Ready" value={stats.rewarded} color="#f59e0b" />
+        <StatCard icon={TrendingUp} label="Plan" value={store?.subscriptionStatus || 'trial'} color="#10b981" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
@@ -97,7 +119,7 @@ export default function Dashboard() {
           <CardDescription>Total customers over time</CardDescription>
           <div className="mt-5 h-44 min-h-[176px] min-w-0">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={mockGrowth} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+              <AreaChart data={growth} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
                 <defs>
                   <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#7c3aed" stopOpacity={0.2} />
@@ -119,7 +141,7 @@ export default function Dashboard() {
           <CardDescription>Stamps issued and rewards earned</CardDescription>
           <div className="mt-5 h-44 min-h-[176px] min-w-0">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={mockActivity2} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+              <BarChart data={loyalty} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f1f5" vertical={false} />
                 <XAxis dataKey="month" tick={{ fill: '#9494a6', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#9494a6', fontSize: 11 }} axisLine={false} tickLine={false} />
@@ -136,7 +158,11 @@ export default function Dashboard() {
         <CardTitle>Recent Activity</CardTitle>
         <CardDescription>Latest customer interactions</CardDescription>
         <div className="mt-4">
-          {mockActivity.map((a) => <ActivityItem key={a.id} item={a} />)}
+          {recentActivity.length === 0 ? (
+            <p className="text-sm text-body py-4">No recent activity yet.</p>
+          ) : (
+            recentActivity.map((a) => <ActivityItem key={a.id} item={a} />)
+          )}
         </div>
       </Card>
     </DashboardLayout>

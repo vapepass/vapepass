@@ -1,11 +1,12 @@
 'use client';
+
 import { ToastProvider } from '@/components/ui/Toast';
-import { ComingSoonProvider } from '@/components/ComingSoonProvider';
+import { AuthProvider } from '@/context/AuthContext';
 
 export default function Providers({ children }) {
   return (
-    <ComingSoonProvider>
+    <AuthProvider>
       <ToastProvider>{children}</ToastProvider>
-    </ComingSoonProvider>
+    </AuthProvider>
   );
 }

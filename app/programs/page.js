@@ -1,28 +1,62 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import PageHeader from '@/components/ui/PageHeader';
-import { Card, CardTitle } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import { Input, FormField } from '@/components/ui/Input';
 import WalletPassPreview from '@/components/WalletPassPreview';
-import { mockStore } from '@/data/mock';
-import { Save, CheckCircle } from 'lucide-react';
+import QrCodeImage from '@/components/QrCodeImage';
+import { Save, CheckCircle, Link2, Copy } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
+import { useAuth } from '@/context/AuthContext';
+import { formToStorePayload, storeToForm } from '@/lib/store-utils';
+import { ApiError, fieldErrorsToMap } from '@/lib/api';
 
 const COLORS = ['#7c3aed', '#db2777', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#9333ea', '#0891b2'];
 const STAMP_GOALS = [5, 7, 8, 9, 10, 12, 15];
 
 export default function Programs() {
   const { toast } = useToast();
-  const [form, setForm] = useState({ ...mockStore });
+  const { store, updateStore } = useAuth();
+  const [form, setForm] = useState(storeToForm(null));
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [logoFile, setLogoFile] = useState(null);
+
+  useEffect(() => {
+    if (store) setForm(storeToForm(store));
+  }, [store]);
+
   const set = (k, v) => { setForm((f) => ({ ...f, [k]: v })); setSaved(false); };
 
-  const save = () => {
-    setSaved(true);
-    toast('Program settings saved successfully', 'success');
-    setTimeout(() => setSaved(false), 2500);
+  const joinUrl = store?._id
+    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/join-program?store=${store._id}`
+    : '';
+
+  const copyJoinLink = () => {
+    if (joinUrl) {
+      navigator.clipboard.writeText(joinUrl);
+      toast('Join link copied', 'success');
+    }
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await updateStore(formToStorePayload(form), logoFile);
+      setLogoFile(null);
+      setSaved(true);
+      toast('Program settings saved successfully', 'success');
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      const message = err instanceof ApiError
+        ? fieldErrorsToMap(err.errors).name || err.message
+        : 'Failed to save program settings';
+      toast(message, 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -31,6 +65,29 @@ export default function Programs() {
         title="Loyalty Programs"
         description="Changes update the wallet pass for all new customers"
       />
+
+      {joinUrl && (
+        <Card className="mb-6">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-6">
+            <div className="flex-shrink-0 mx-auto lg:mx-0">
+              <QrCodeImage value={joinUrl} size={160} alt="Store join QR code" />
+              <p className="text-xs text-muted text-center mt-2">Print & display at checkout</p>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-ink flex items-center gap-2">
+                <Link2 size={16} /> Customer join link & QR
+              </p>
+              <p className="text-xs text-body mt-2 break-all">{joinUrl}</p>
+              <p className="text-xs text-muted mt-2">
+                Customers scan this QR in-store, enter their age verification code, and receive their wallet pass.
+              </p>
+              <Button variant="secondary" size="sm" className="mt-4" onClick={copyJoinLink}>
+                <Copy size={14} /> Copy Link
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
         <Card className="space-y-6">
@@ -41,16 +98,30 @@ export default function Programs() {
           <div>
             <label className="block text-sm font-medium text-ink mb-2">Logo</label>
             <div className="flex items-center gap-4">
-              <div
-                className="w-14 h-14 rounded-xl flex items-center justify-center text-xl font-bold text-white shadow-sm"
-                style={{ background: form.color }}
-              >
-                {form.name.charAt(0) || '?'}
-              </div>
+              {form.logo ? (
+                <img src={form.logo} alt="" className="w-14 h-14 rounded-xl object-cover shadow-sm" />
+              ) : (
+                <div
+                  className="w-14 h-14 rounded-xl flex items-center justify-center text-xl font-bold text-white shadow-sm"
+                  style={{ background: form.color }}
+                >
+                  {form.name.charAt(0) || '?'}
+                </div>
+              )}
               <label className="cursor-pointer">
                 <Button variant="secondary" size="sm" as="span">Upload Logo</Button>
-                <input type="file" className="hidden" accept="image/*" aria-label="Upload store logo" />
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  aria-label="Upload store logo"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) setLogoFile(file);
+                  }}
+                />
               </label>
+              {logoFile && <span className="text-xs text-muted">{logoFile.name}</span>}
             </div>
           </div>
 
@@ -107,8 +178,8 @@ export default function Programs() {
             Every <strong>{form.stampGoal}th visit</strong> earns: <strong>{form.reward || '—'}</strong>
           </div>
 
-          <Button onClick={save} className="w-full">
-            {saved ? <><CheckCircle size={15} /> Saved</> : <><Save size={15} /> Save Changes</>}
+          <Button onClick={save} className="w-full" disabled={saving}>
+            {saving ? 'Saving…' : saved ? <><CheckCircle size={15} /> Saved</> : <><Save size={15} /> Save Changes</>}
           </Button>
         </Card>
 

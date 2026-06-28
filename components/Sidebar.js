@@ -5,6 +5,7 @@ import {
   LayoutDashboard, Users, ScanLine, Gift, FileClock, Settings, X, Sparkles,
 } from 'lucide-react';
 import Logo from '@/components/Logo';
+import { useAuth } from '@/context/AuthContext';
 
 const nav = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -17,6 +18,8 @@ const nav = [
 
 export default function Sidebar({ onClose }) {
   const path = usePathname();
+  const { store } = useAuth();
+  const storeName = store?.name || 'Your Store';
 
   return (
     <aside className="flex flex-col h-full bg-surface border-r border-line">
@@ -35,7 +38,7 @@ export default function Sidebar({ onClose }) {
 
       <div className="mx-4 mt-5 mb-2 px-4 py-3 rounded-xl bg-brand-50 border border-brand-100">
         <p className="text-[11px] font-semibold text-brand-600 uppercase tracking-wider mb-0.5">Current Store</p>
-        <p className="text-sm font-semibold text-ink truncate">Cloud Nine Vapes</p>
+        <p className="text-sm font-semibold text-ink truncate">{storeName}</p>
       </div>
 
       <nav className="flex-1 px-3 py-3 space-y-1" aria-label="Main navigation">
@@ -65,9 +68,11 @@ export default function Sidebar({ onClose }) {
       <div className="p-4 mx-3 mb-4 rounded-xl bg-gradient-to-br from-brand-50 to-brand-100/50 border border-brand-100">
         <div className="flex items-center gap-2 mb-1">
           <Sparkles size={14} className="text-brand-600" aria-hidden="true" />
-          <p className="text-xs font-semibold text-ink">Starter Plan</p>
+          <p className="text-xs font-semibold text-ink">VapePass Plan</p>
         </div>
-        <p className="text-xs text-body">$29/mo · Active</p>
+        <p className="text-xs text-body capitalize">
+          $99/mo · {store?.subscriptionStatus?.replace('_', ' ') || 'trial'}
+        </p>
       </div>
     </aside>
   );

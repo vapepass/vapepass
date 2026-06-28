@@ -30,6 +30,23 @@ export function InputIcon({ children, className = '' }) {
   );
 }
 
+export function InputToggle({ onClick, label, children, className = '' }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        'absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg',
+        'text-muted hover:text-ink transition-colors',
+        className,
+      ].join(' ')}
+      aria-label={label}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function Label({ children, htmlFor, className = '', required = false }) {
   return (
     <label

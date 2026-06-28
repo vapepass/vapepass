@@ -3,10 +3,15 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { Bell, ChevronDown, Menu, LogOut, Settings, User } from 'lucide-react';
 import Avatar from '@/components/ui/Avatar';
+import { useAuth } from '@/context/AuthContext';
 
-export default function Navbar({ onMenuClick, title = 'Cloud Nine Vapes', subtitle = 'Vancouver, BC' }) {
+export default function Navbar({ onMenuClick }) {
+  const { user, store, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
+
+  const displayName = user ? `${user.firstName} ${user.lastName}` : 'Owner';
+  const storeName = store?.name || 'Your Store';
 
   useEffect(() => {
     const handleClick = (e) => {
@@ -15,6 +20,11 @@ export default function Navbar({ onMenuClick, title = 'Cloud Nine Vapes', subtit
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
+
+  const handleLogout = async () => {
+    setOpen(false);
+    await logout();
+  };
 
   return (
     <header className="flex items-center justify-between px-4 sm:px-6 h-16 bg-surface/80 backdrop-blur-md border-b border-line sticky top-0 z-20">
@@ -27,8 +37,8 @@ export default function Navbar({ onMenuClick, title = 'Cloud Nine Vapes', subtit
           <Menu size={20} />
         </button>
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-ink truncate">{title}</h2>
-          <p className="text-xs text-muted truncate">{subtitle}</p>
+          <h2 className="text-sm font-semibold text-ink truncate">{storeName}</h2>
+          <p className="text-xs text-muted truncate">{user?.email || 'Store dashboard'}</p>
         </div>
       </div>
 
@@ -49,8 +59,8 @@ export default function Navbar({ onMenuClick, title = 'Cloud Nine Vapes', subtit
             aria-haspopup="menu"
             aria-label="Account menu"
           >
-            <Avatar name="Owner" size="sm" />
-            <span className="text-sm font-medium text-ink hidden sm:block">Owner</span>
+            <Avatar name={displayName} size="sm" />
+            <span className="text-sm font-medium text-ink hidden sm:block">{user?.firstName || 'Owner'}</span>
             <ChevronDown size={14} className={`text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
           </button>
 
@@ -76,14 +86,14 @@ export default function Navbar({ onMenuClick, title = 'Cloud Nine Vapes', subtit
                 <Settings size={15} /> Settings
               </Link>
               <hr className="my-1.5 border-line-subtle" />
-              <Link
-                href="/"
+              <button
+                type="button"
                 role="menuitem"
-                onClick={() => setOpen(false)}
-                className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-body hover:text-ink hover:bg-canvas transition-colors"
+                onClick={handleLogout}
+                className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-body hover:text-ink hover:bg-canvas transition-colors"
               >
                 <LogOut size={15} /> Sign out
-              </Link>
+              </button>
             </div>
           )}
         </div>

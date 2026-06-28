@@ -7,11 +7,7 @@ export function Table({ children, className = '' }) {
 }
 
 export function TableHead({ children }) {
-  return (
-    <thead>
-      <tr className="border-b border-line">{children}</tr>
-    </thead>
-  );
+  return <thead>{children}</thead>;
 }
 
 export function TableHeader({ children, className = '', sortable = false, sorted = null }) {

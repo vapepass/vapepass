@@ -3,18 +3,17 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { LogIn, Mail, Lock } from 'lucide-react';
+import { Shield, Mail, Lock } from 'lucide-react';
 import AuthLayout from '@/components/AuthLayout';
-import GuestGuard from '@/components/GuestGuard';
+import AdminGuestGuard from '@/components/AdminGuestGuard';
 import Button from '@/components/ui/Button';
 import { Input, FormField, InputGroup, InputIcon } from '@/components/ui/Input';
-import GoogleIcon from '@/components/GoogleIcon';
 import { useAuth } from '@/context/AuthContext';
 import { ApiError, fieldErrorsToMap } from '@/lib/api';
 
-export default function Login() {
+export default function AdminLoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, logout } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({});
@@ -39,12 +38,15 @@ export default function Login() {
     try {
       const data = await login(email.trim(), password);
 
-      if (data.user?.role === 'admin') {
-        router.replace('/admin');
+      if (data.user?.role !== 'admin') {
+        await logout('/login');
+        setErrors({
+          _form: 'This account is not an admin. Please use the store sign-in page instead.',
+        });
         return;
       }
 
-      router.replace('/dashboard');
+      router.replace('/admin');
     } catch (err) {
       if (err instanceof ApiError) {
         const fieldErrors = fieldErrorsToMap(err.errors);
@@ -53,17 +55,16 @@ export default function Login() {
       } else {
         setErrors({ _form: 'Unable to sign in. Please try again.' });
       }
-    } finally {
       setLoading(false);
     }
   };
 
   return (
-    <GuestGuard>
+    <AdminGuestGuard>
       <AuthLayout
-        icon={LogIn}
-        title="Welcome back"
-        subtitle="Sign in to manage your loyalty program"
+        icon={Shield}
+        title="Admin sign in"
+        subtitle="Platform administration for VapePass"
       >
         <form onSubmit={handleSubmit} className="space-y-5" noValidate>
           {errors._form && (
@@ -72,14 +73,14 @@ export default function Login() {
             </p>
           )}
 
-          <FormField label="Email" htmlFor="email" error={errors.email} required>
+          <FormField label="Admin email" htmlFor="admin-email" error={errors.email} required>
             <InputGroup>
               <InputIcon><Mail size={16} /></InputIcon>
               <Input
-                id="email"
+                id="admin-email"
                 type="email"
                 autoComplete="email"
-                placeholder="you@store.com"
+                placeholder="admin@vapepass.com"
                 className="pl-10"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -88,11 +89,11 @@ export default function Login() {
             </InputGroup>
           </FormField>
 
-          <FormField label="Password" htmlFor="password" error={errors.password} required>
+          <FormField label="Password" htmlFor="admin-password" error={errors.password} required>
             <InputGroup>
               <InputIcon><Lock size={16} /></InputIcon>
               <Input
-                id="password"
+                id="admin-password"
                 type="password"
                 autoComplete="current-password"
                 placeholder="••••••••"
@@ -104,40 +105,18 @@ export default function Login() {
             </InputGroup>
           </FormField>
 
-          <div className="flex justify-end">
-            <Link
-              href="/forgot-password"
-              className="text-sm font-medium text-brand-600 hover:text-brand-700 transition-colors"
-            >
-              Forgot password?
-            </Link>
-          </div>
-
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? 'Signing in…' : 'Sign In'}
-          </Button>
-
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center" aria-hidden="true">
-              <div className="w-full border-t border-line" />
-            </div>
-            <div className="relative flex justify-center text-xs">
-              <span className="bg-surface px-3 text-muted">or continue with</span>
-            </div>
-          </div>
-
-          <Button type="button" variant="secondary" className="w-full" disabled>
-            <GoogleIcon /> Google
+            {loading ? 'Signing in…' : 'Sign in to Admin'}
           </Button>
 
           <p className="text-center text-sm text-body pt-2">
-            Don&apos;t have an account?{' '}
-            <Link href="/register" className="font-semibold text-brand-600 hover:text-brand-700">
-              Get started
+            Store owner?{' '}
+            <Link href="/login" className="font-semibold text-brand-600 hover:text-brand-700">
+              Sign in here
             </Link>
           </p>
         </form>
       </AuthLayout>
-    </GuestGuard>
+    </AdminGuestGuard>
   );
 }

@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import PageHeader from '@/components/ui/PageHeader';
 import { Card, CardTitle } from '@/components/ui/Card';
@@ -9,18 +9,89 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import Avatar from '@/components/ui/Avatar';
 import { Input, FormField } from '@/components/ui/Input';
-import { Table, TableBody, TableRow, TableCell } from '@/components/ui/Table';
-import { mockStore, mockBilling } from '@/data/mock';
-import { Save, CheckCircle, CreditCard, Download, Zap } from 'lucide-react';
+import { Save, CheckCircle, CreditCard, Zap } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
+import { useAuth } from '@/context/AuthContext';
+import { storeToForm } from '@/lib/store-utils';
+import { ApiError, fieldErrorsToMap } from '@/lib/api';
+import { getBillingInfo, createCheckoutSession, createBillingPortal } from '@/lib/billing-api';
 
 export default function Settings() {
   const { toast } = useToast();
+  const { user, store, updateStore } = useAuth();
   const [tab, setTab] = useState('profile');
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [notifs, setNotifs] = useState({ reward: true, join: true, stamp: false, weekly: true });
+  const [profile, setProfile] = useState({ name: '', email: '', phone: '', address: '' });
+  const [logoFile, setLogoFile] = useState(null);
+  const [billingInfo, setBillingInfo] = useState(null);
+  const [billingLoading, setBillingLoading] = useState(false);
+
+  useEffect(() => {
+    if (store && user) {
+      setProfile({
+        name: store.name || '',
+        email: user.email || '',
+        phone: '',
+        address: '',
+      });
+    }
+  }, [store, user]);
+
+  useEffect(() => {
+    if (tab === 'billing') {
+      getBillingInfo().then(setBillingInfo).catch(() => {});
+    }
+  }, [tab]);
+
+  const startCheckout = async () => {
+    setBillingLoading(true);
+    try {
+      const { url } = await createCheckoutSession();
+      if (url) window.location.href = url;
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Unable to start checkout', 'error');
+    } finally {
+      setBillingLoading(false);
+    }
+  };
+
+  const openPortal = async () => {
+    setBillingLoading(true);
+    try {
+      const { url } = await createBillingPortal();
+      if (url) window.location.href = url;
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Unable to open billing portal', 'error');
+    } finally {
+      setBillingLoading(false);
+    }
+  };
+
+  const saveProfile = async () => {
+    setSaving(true);
+    try {
+      await updateStore({ name: profile.name }, logoFile);
+      setLogoFile(null);
+      setSaved(true);
+      toast('Settings saved successfully', 'success');
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      const message = err instanceof ApiError
+        ? fieldErrorsToMap(err.errors).name || err.message
+        : 'Failed to save settings';
+      toast(message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const save = () => {
+    if (tab === 'profile') {
+      saveProfile();
+      return;
+    }
     setSaved(true);
     toast('Settings saved successfully', 'success');
     setTimeout(() => setSaved(false), 2500);
@@ -32,6 +103,8 @@ export default function Settings() {
     { id: 'notifications', label: 'Notifications' },
     { id: 'security', label: 'Security' },
   ];
+
+  const storeForm = storeToForm(store);
 
   return (
     <DashboardLayout>
@@ -46,29 +119,63 @@ export default function Settings() {
         {tab === 'profile' && (
           <Card className="animate-fade-in space-y-6">
             <div className="flex items-center gap-4 pb-6 border-b border-line-subtle">
-              <Avatar name={mockStore.name} size="xl" />
+              {storeForm.logo ? (
+                <img src={storeForm.logo} alt="" className="w-16 h-16 rounded-2xl object-cover" />
+              ) : (
+                <Avatar name={profile.name} size="xl" />
+              )}
               <div>
-                <p className="font-bold text-ink text-lg tracking-tight">{mockStore.name}</p>
+                <p className="font-bold text-ink text-lg tracking-tight">{profile.name}</p>
                 <label className="mt-2 inline-block cursor-pointer">
                   <Button variant="secondary" size="sm" as="span">Change Logo</Button>
-                  <input type="file" className="hidden" accept="image/*" aria-label="Upload logo" />
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*"
+                    aria-label="Upload logo"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) setLogoFile(file);
+                    }}
+                  />
                 </label>
+                {logoFile && <p className="text-xs text-muted mt-1">{logoFile.name}</p>}
               </div>
             </div>
 
-            {[
-              { id: 'store-name', label: 'Store Name', defaultValue: mockStore.name },
-              { id: 'email', label: 'Email', defaultValue: mockStore.email, type: 'email' },
-              { id: 'phone', label: 'Phone', defaultValue: mockStore.phone, type: 'tel' },
-              { id: 'address', label: 'Address', defaultValue: mockStore.address },
-            ].map((f) => (
-              <FormField key={f.id} label={f.label} htmlFor={f.id}>
-                <Input id={f.id} type={f.type || 'text'} defaultValue={f.defaultValue} />
-              </FormField>
-            ))}
+            <FormField label="Store Name" htmlFor="store-name">
+              <Input
+                id="store-name"
+                value={profile.name}
+                onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
+              />
+            </FormField>
 
-            <Button onClick={save} className="w-full">
-              {saved ? <><CheckCircle size={15} /> Saved</> : <><Save size={15} /> Save Changes</>}
+            <FormField label="Email" htmlFor="email" hint="Account email — contact support to change">
+              <Input id="email" type="email" value={profile.email} readOnly className="bg-canvas" />
+            </FormField>
+
+            <FormField label="Phone" htmlFor="phone">
+              <Input
+                id="phone"
+                type="tel"
+                value={profile.phone}
+                onChange={(e) => setProfile((p) => ({ ...p, phone: e.target.value }))}
+                placeholder="Not yet synced to server"
+              />
+            </FormField>
+
+            <FormField label="Address" htmlFor="address">
+              <Input
+                id="address"
+                value={profile.address}
+                onChange={(e) => setProfile((p) => ({ ...p, address: e.target.value }))}
+                placeholder="Not yet synced to server"
+              />
+            </FormField>
+
+            <Button onClick={save} className="w-full" disabled={saving}>
+              {saving ? 'Saving…' : saved ? <><CheckCircle size={15} /> Saved</> : <><Save size={15} /> Save Changes</>}
             </Button>
           </Card>
         )}
@@ -82,52 +189,40 @@ export default function Settings() {
                     <Zap size={20} className="text-white" />
                   </div>
                   <div>
-                    <p className="font-bold text-ink">Starter Plan</p>
-                    <p className="text-body text-sm">$29 / month</p>
+                    <p className="font-bold text-ink">Pro Plan</p>
+                    <p className="text-body text-sm">${billingInfo?.monthlyPrice ?? 99} / month</p>
                   </div>
                 </div>
-                <Badge variant="success">Active</Badge>
+                <Badge variant="success">{store?.subscriptionStatus || 'trial'}</Badge>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
                 {[
-                  { label: 'Next billing', value: 'July 1, 2025' },
-                  { label: 'Payment method', value: 'Visa •••• 4242' },
+                  { label: 'Billing provider', value: billingInfo?.configured ? 'Stripe' : 'Not configured' },
+                  { label: 'Status', value: store?.subscriptionStatus || 'trial' },
                 ].map(({ label, value }) => (
                   <div key={label} className="px-4 py-3.5 rounded-xl bg-canvas border border-line-subtle">
                     <p className="text-muted text-xs mb-1">{label}</p>
-                    <p className="text-ink text-sm font-semibold">{value}</p>
+                    <p className="text-ink text-sm font-semibold capitalize">{value}</p>
                   </div>
                 ))}
               </div>
 
               <div className="flex flex-wrap gap-3">
-                <Button variant="secondary" size="sm"><CreditCard size={14} /> Update Payment</Button>
-                <Button variant="danger" size="sm">Cancel Plan</Button>
+                <Button variant="secondary" size="sm" onClick={startCheckout} disabled={billingLoading}>
+                  <CreditCard size={14} /> Subscribe — $99/mo
+                </Button>
+                <Button variant="secondary" size="sm" onClick={openPortal} disabled={billingLoading}>
+                  Manage Subscription
+                </Button>
               </div>
             </Card>
 
-            <Card padding={false} className="overflow-hidden">
-              <div className="px-6 py-4 border-b border-line">
-                <CardTitle>Billing History</CardTitle>
-              </div>
-              <Table>
-                <TableBody>
-                  {mockBilling.map((b) => (
-                    <TableRow key={b.id}>
-                      <TableCell className="font-mono text-xs text-muted">{b.id}</TableCell>
-                      <TableCell>{b.date}</TableCell>
-                      <TableCell className="font-semibold">{b.amount}</TableCell>
-                      <TableCell><Badge variant="success">{b.status}</Badge></TableCell>
-                      <TableCell>
-                        <button className="p-2 rounded-lg text-muted hover:text-ink hover:bg-canvas transition-colors" aria-label={`Download invoice ${b.id}`}>
-                          <Download size={14} />
-                        </button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <Card>
+              <CardTitle>Billing History</CardTitle>
+              <p className="text-sm text-body mt-3">
+                Invoice history is available in the Stripe customer portal after you subscribe.
+              </p>
             </Card>
           </div>
         )}
@@ -159,32 +254,26 @@ export default function Settings() {
         {tab === 'security' && (
           <Card className="animate-fade-in space-y-6">
             <div>
-              <h3 className="font-semibold text-ink mb-5">Change Password</h3>
-              {['current', 'new', 'confirm'].map((id) => (
-                <FormField
-                  key={id}
-                  label={id === 'current' ? 'Current Password' : id === 'new' ? 'New Password' : 'Confirm New Password'}
-                  htmlFor={id}
-                  className="mb-4"
-                >
-                  <Input id={id} type="password" placeholder="••••••••" autoComplete={id === 'current' ? 'current-password' : 'new-password'} />
-                </FormField>
-              ))}
-              <Button onClick={save} className="w-full">
-                {saved ? <><CheckCircle size={15} /> Updated</> : <><Save size={15} /> Update Password</>}
-              </Button>
+              <h3 className="font-semibold text-ink mb-2">Change Password</h3>
+              <p className="text-body text-xs mb-5">
+                Use the{' '}
+                <a href="/forgot-password" className="text-brand-600 hover:text-brand-700 font-medium">
+                  forgot password
+                </a>{' '}
+                flow to reset your password via email.
+              </p>
             </div>
 
             <div className="pt-6 border-t border-line-subtle">
               <h3 className="font-semibold text-ink mb-2">Two-Factor Authentication</h3>
               <p className="text-body text-xs mb-4">Add an extra layer of security to your account.</p>
-              <Button variant="secondary" size="sm">Enable 2FA</Button>
+              <Button variant="secondary" size="sm" disabled>Enable 2FA</Button>
             </div>
 
             <div className="pt-6 border-t border-line-subtle">
               <h3 className="font-semibold text-danger-600 mb-2">Danger Zone</h3>
               <p className="text-body text-xs mb-4">Permanently delete your account and all associated data.</p>
-              <Button variant="danger" size="sm">Delete Account</Button>
+              <Button variant="danger" size="sm" disabled>Delete Account</Button>
             </div>
           </Card>
         )}

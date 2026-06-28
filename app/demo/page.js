@@ -24,7 +24,6 @@ import Button from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import WalletPassPreview from '@/components/WalletPassPreview';
 import Progress from '@/components/ui/Progress';
-import { useComingSoon } from '@/components/ComingSoonProvider';
 import {
   demoStore,
   demoStats,
@@ -378,7 +377,7 @@ function StepNotifications() {
   );
 }
 
-function StepCta({ onJoin }) {
+function StepCta() {
   return (
     <div className="text-center py-4 sm:py-8">
       <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl gradient-brand shadow-brand mb-6">
@@ -392,7 +391,7 @@ function StepCta({ onJoin }) {
         Set up in under 10 minutes — no credit card required.
       </p>
       <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-        <Button onClick={onJoin} size="lg">
+        <Button as={Link} href="/register" size="lg">
           Start Free Trial <ArrowRight size={18} />
         </Button>
         <Button as="a" href="mailto:hello@vapepass.com?subject=Book%20a%20Demo" variant="secondary" size="lg">
@@ -419,7 +418,6 @@ const stepComponents = [
 ];
 
 export default function DemoTour() {
-  const { openComingSoon } = useComingSoon();
   const [step, setStep] = useState(1);
   const [animKey, setAnimKey] = useState(0);
 
@@ -431,7 +429,7 @@ export default function DemoTour() {
   const next = () => goTo(Math.min(step + 1, TOTAL));
   const prev = () => goTo(Math.max(step - 1, 1));
 
-  const StepContent = step === 7 ? () => <StepCta onJoin={openComingSoon} /> : stepComponents[step - 1];
+  const StepContent = stepComponents[step - 1];
   const isFirst = step === 1;
   const isLast = step === TOTAL;
 
@@ -444,7 +442,7 @@ export default function DemoTour() {
             <span className="hidden sm:inline text-xs font-medium text-muted px-3 py-1.5 rounded-full bg-canvas border border-line">
               Interactive Demo
             </span>
-            <Button onClick={openComingSoon} size="sm">
+            <Button as={Link} href="/register" size="sm">
               Get Started
             </Button>
           </div>

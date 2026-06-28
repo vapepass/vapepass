@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import PageHeader from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
@@ -7,38 +7,108 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import Avatar from '@/components/ui/Avatar';
 import Progress from '@/components/ui/Progress';
-import Spinner from '@/components/ui/Spinner';
+import QrScanner from '@/components/QrScanner';
 import { useToast } from '@/components/ui/Toast';
-import { mockCustomers } from '@/data/mock';
-import { ScanLine, CheckCircle, Plus, RotateCcw } from 'lucide-react';
+import { generateVerificationCode } from '@/lib/verification-api';
+import { lookupCustomer, addStamp, redeemReward } from '@/lib/customer-api';
+import { mapCustomer } from '@/lib/mappers';
+import { ApiError } from '@/lib/api';
+import { ScanLine, CheckCircle, Plus, RotateCcw, KeyRound, Copy } from 'lucide-react';
 
 export default function Scan() {
   const { toast } = useToast();
-  const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState(null);
   const [stamps, setStamps] = useState(null);
+  const [codeData, setCodeData] = useState(null);
+  const [generatingCode, setGeneratingCode] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+  const [cameraActive, setCameraActive] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const processingScanRef = useRef(false);
 
-  const mockScan = () => {
-    setScanning(true);
-    setTimeout(() => {
-      const customer = mockCustomers[Math.floor(Math.random() * mockCustomers.length)];
-      setResult(customer);
-      setStamps(customer.stamps);
-      setScanning(false);
-    }, 1200);
+  const handleScan = useCallback(async (decodedText) => {
+    if (result || actionLoading || processingScanRef.current) return;
+
+    processingScanRef.current = true;
+    setCameraActive(false);
+
+    // Wait for serialized camera stop (see QrScanner queue) before API call
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    try {
+      const customer = await lookupCustomer(decodedText);
+      const mapped = mapCustomer(customer);
+      setResult(mapped);
+      setStamps(mapped.stamps);
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Customer not found', 'error');
+      setCameraActive(true);
+    } finally {
+      processingScanRef.current = false;
+    }
+  }, [result, actionLoading, toast]);
+
+  const generateCode = async () => {
+    setGeneratingCode(true);
+    try {
+      const data = await generateVerificationCode();
+      setCodeData(data);
+      toast('Age verification code generated', 'success');
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Failed to generate code', 'error');
+    } finally {
+      setGeneratingCode(false);
+    }
   };
 
-  const addStamp = () => {
-    if (stamps >= result.goal) return;
-    const next = stamps + 1;
-    setStamps(next);
-    const msg = next >= result.goal
-      ? `Reward earned! ${result.name} gets a free reward.`
-      : `Stamp added — ${next}/${result.goal}`;
-    toast(msg, next >= result.goal ? 'success' : 'info');
+  const copyCode = () => {
+    if (codeData?.code) {
+      navigator.clipboard.writeText(codeData.code);
+      toast('Code copied to clipboard', 'info');
+    }
   };
 
-  const reset = () => { setResult(null); setStamps(null); setScanning(false); };
+  const handleAddStamp = async () => {
+    if (!result || stamps >= result.goal) return;
+    setActionLoading(true);
+    try {
+      const customer = await addStamp(result.id);
+      const mapped = mapCustomer(customer);
+      setResult(mapped);
+      setStamps(mapped.stamps);
+      const msg = mapped.stamps >= mapped.goal
+        ? `Reward earned! ${mapped.name} gets a free reward.`
+        : `Stamp added — ${mapped.stamps}/${mapped.goal}`;
+      toast(msg, mapped.stamps >= mapped.goal ? 'success' : 'info');
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Failed to add stamp', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRedeem = async () => {
+    if (!result) return;
+    setActionLoading(true);
+    try {
+      const customer = await redeemReward(result.id);
+      const mapped = mapCustomer(customer);
+      setResult(mapped);
+      setStamps(0);
+      toast('Reward redeemed — stamps reset', 'success');
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Failed to redeem reward', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const reset = () => {
+    setResult(null);
+    setStamps(null);
+    setCameraError('');
+    setCameraActive(true);
+  };
 
   return (
     <DashboardLayout>
@@ -47,45 +117,46 @@ export default function Scan() {
         description="Scan the QR code on the customer's wallet pass"
       />
 
-      <div className="max-w-md mx-auto">
-        {!result ? (
+      <div className="max-w-md mx-auto space-y-6">
+        {!result && (
           <Card>
-            <div
-              className="relative rounded-2xl overflow-hidden mb-6 bg-canvas border-2 border-line aspect-square"
-              aria-label="Camera scanner viewfinder"
-            >
-              {[
-                ['top-4 left-4', 'border-t-2 border-l-2'],
-                ['top-4 right-4', 'border-t-2 border-r-2'],
-                ['bottom-4 left-4', 'border-b-2 border-l-2'],
-                ['bottom-4 right-4', 'border-b-2 border-r-2'],
-              ].map(([pos, border]) => (
-                <div key={pos} className={`absolute ${pos} w-8 h-8 ${border} rounded-sm border-brand-600`} aria-hidden="true" />
-              ))}
-
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-                {scanning ? (
-                  <>
-                    <Spinner size="lg" />
-                    <p className="text-body text-sm font-medium">Scanning…</p>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-16 h-16 rounded-2xl bg-brand-50 flex items-center justify-center">
-                      <ScanLine size={32} className="text-brand-600" aria-hidden="true" />
-                    </div>
-                    <p className="text-body text-sm text-center px-6">
-                      Camera scanner ready<br />
-                      Point at customer&apos;s wallet QR
-                    </p>
-                  </>
-                )}
+            <h3 className="font-semibold text-ink mb-3 flex items-center gap-2">
+              <KeyRound size={16} /> Age Verification Code
+            </h3>
+            <p className="text-sm text-body mb-4">
+              Verify the customer&apos;s ID, then generate a one-time code (expires in 10 minutes).
+            </p>
+            {codeData ? (
+              <div className="rounded-xl bg-brand-50 border border-brand-100 p-4 mb-4 text-center">
+                <p className="text-xs text-muted mb-1">Give this code to the customer</p>
+                <p className="text-3xl font-mono font-bold tracking-[0.3em] text-brand-700">{codeData.code}</p>
+                <p className="text-xs text-muted mt-2">Expires in 10 minutes</p>
+                <Button variant="secondary" size="sm" className="mt-3" onClick={copyCode}>
+                  <Copy size={14} /> Copy Code
+                </Button>
               </div>
+            ) : null}
+            <Button onClick={generateCode} disabled={generatingCode} variant="secondary" className="w-full mb-6">
+              {generatingCode ? 'Generating…' : 'Generate Verification Code'}
+            </Button>
+          </Card>
+        )}
 
-              {scanning && (
-                <div className="absolute left-6 right-6 h-0.5 bg-brand-600 top-1/2 animate-pulse" aria-hidden="true" />
-              )}
-            </div>
+        <Card className={result ? 'hidden' : ''}>
+            {cameraError ? (
+              <div className="rounded-2xl bg-canvas border border-line p-8 text-center mb-6">
+                <p className="text-sm text-body mb-4">{cameraError}</p>
+                <p className="text-xs text-muted">Use manual entry below or allow camera access.</p>
+              </div>
+            ) : (
+              <div className="mb-6">
+                <QrScanner
+                  active={cameraActive && !result}
+                  onScan={handleScan}
+                  onError={(msg) => setCameraError(msg)}
+                />
+              </div>
+            )}
 
             <ol className="space-y-3 mb-6" aria-label="Scan instructions">
               {[
@@ -103,12 +174,16 @@ export default function Scan() {
               ))}
             </ol>
 
-            <Button onClick={mockScan} disabled={scanning} className="w-full">
-              <ScanLine size={16} />
-              {scanning ? 'Scanning…' : 'Simulate Scan'}
-            </Button>
+            <ManualLookup
+              onFound={(c) => {
+                setCameraActive(false);
+                setResult(c);
+                setStamps(c.stamps);
+              }}
+            />
           </Card>
-        ) : (
+
+        {result ? (
           <div className="animate-slide-up space-y-4">
             <Card>
               <div className="flex items-center gap-4 mb-5">
@@ -126,7 +201,7 @@ export default function Scan() {
 
               {stamps >= result.goal && (
                 <p className="text-sm mb-4 font-medium text-warning-600">
-                  Reward ready! Issue free reward.
+                  Reward ready! Issue free reward, then tap Redeem.
                 </p>
               )}
 
@@ -148,17 +223,63 @@ export default function Scan() {
                 ))}
               </div>
 
-              <Button onClick={addStamp} disabled={stamps >= result.goal} className="w-full">
-                <Plus size={16} /> Add Stamp
+              <Button
+                onClick={handleAddStamp}
+                disabled={actionLoading || stamps >= result.goal}
+                className="w-full mb-3"
+              >
+                <Plus size={16} /> {actionLoading ? 'Adding…' : 'Add Stamp'}
               </Button>
+
+              {stamps >= result.goal && (
+                <Button onClick={handleRedeem} disabled={actionLoading} variant="secondary" className="w-full">
+                  Redeem Reward
+                </Button>
+              )}
             </Card>
 
             <Button onClick={reset} variant="secondary" className="w-full">
               <RotateCcw size={15} /> Scan Another Customer
             </Button>
           </div>
-        )}
+        ) : null}
       </div>
     </DashboardLayout>
+  );
+}
+
+function ManualLookup({ onFound }) {
+  const [passId, setPassId] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+
+  const lookup = async () => {
+    if (!passId.trim()) return;
+    setLoading(true);
+    try {
+      const customer = await lookupCustomer(passId.trim());
+      onFound(mapCustomer(customer));
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Customer not found', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="border-t border-line pt-5">
+      <p className="text-xs text-muted mb-2">Manual QR / pass ID lookup</p>
+      <div className="flex gap-2">
+        <input
+          className="flex-1 h-11 px-3 text-sm border border-line rounded-xl"
+          placeholder="vapepass:uuid or paste QR value"
+          value={passId}
+          onChange={(e) => setPassId(e.target.value)}
+        />
+        <Button onClick={lookup} disabled={loading} size="sm">
+          <ScanLine size={14} /> {loading ? '…' : 'Lookup'}
+        </Button>
+      </div>
+    </div>
   );
 }
