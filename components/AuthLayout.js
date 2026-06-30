@@ -1,21 +1,21 @@
-import Logo from '@/components/Logo';
-import { Card } from '@/components/ui/Card';
-
-export default function AuthLayout({ icon: Icon, title, subtitle, children, maxWidth = 'max-w-md' }) {
+export default function AuthLayout({ title, subtitle, children, footer }) {
   return (
-    <div className="min-h-screen gradient-mesh flex items-center justify-center px-4 py-12 sm:py-16">
-      <div className={`w-full ${maxWidth} animate-slide-up`}>
-        <div className="flex flex-col items-center text-center mb-8">
-          <Logo size={48} />
-          <div className="mt-6 w-12 h-12 rounded-2xl gradient-brand flex items-center justify-center shadow-brand">
-            <Icon size={22} className="text-white" aria-hidden="true" />
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-ink tracking-tight mt-6 mb-2">{title}</h1>
-          {subtitle && <p className="text-body text-base max-w-sm">{subtitle}</p>}
+    <div className="min-h-screen bg-[#f9fafb] flex items-center justify-center px-4 py-12 sm:py-16">
+      <div className="w-full max-w-[440px] animate-slide-up">
+        <div className="text-center mb-8 sm:mb-10">
+          <h1 className="text-[1.75rem] sm:text-[2rem] font-bold text-[#111827] tracking-[-0.02em] mb-2">
+            {title}
+          </h1>
+          {subtitle && (
+            <p className="text-[#6b7280] text-base sm:text-[17px]">{subtitle}</p>
+          )}
         </div>
-        <Card className="shadow-md" padding>
+
+        <div className="bg-white rounded-[18px] sm:rounded-[20px] border border-[#e8eaef] shadow-[0_2px_12px_rgba(12,12,18,0.04)] px-7 sm:px-8 py-8 sm:py-9">
           {children}
-        </Card>
+        </div>
+
+        {footer && <div className="mt-6 text-center">{footer}</div>}
       </div>
     </div>
   );

@@ -3,10 +3,9 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { LogIn, Mail, Lock } from 'lucide-react';
+import { Mail, Lock } from 'lucide-react';
 import AuthLayout from '@/components/AuthLayout';
 import GuestGuard from '@/components/GuestGuard';
-import Button from '@/components/ui/Button';
 import { Input, FormField, InputGroup, InputIcon } from '@/components/ui/Input';
 import { useAuth } from '@/context/AuthContext';
 import { ApiError, fieldErrorsToMap } from '@/lib/api';
@@ -60,9 +59,16 @@ export default function Login() {
   return (
     <GuestGuard>
       <AuthLayout
-        icon={LogIn}
-        title="Welcome back"
-        subtitle="Sign in to manage your loyalty program"
+        title="Sign in to your account"
+        subtitle="Welcome back — sign in to continue"
+        footer={
+          <p className="text-sm text-[#6b7280]">
+            Don&apos;t have an account?{' '}
+            <Link href="/register" className="font-semibold text-brand-600 hover:text-brand-700 transition-colors">
+              Create account
+            </Link>
+          </p>
+        }
       >
         <form onSubmit={handleSubmit} className="space-y-5" noValidate>
           {errors._form && (
@@ -71,15 +77,21 @@ export default function Login() {
             </p>
           )}
 
-          <FormField label="Email" htmlFor="email" error={errors.email} required>
+          <FormField
+            label="Email"
+            htmlFor="email"
+            error={errors.email}
+            required
+            className="[&_label]:font-semibold [&_label]:text-[#111827]"
+          >
             <InputGroup>
               <InputIcon><Mail size={16} /></InputIcon>
               <Input
                 id="email"
                 type="email"
                 autoComplete="email"
-                placeholder="you@store.com"
-                className="pl-10"
+                placeholder="you@example.com"
+                className="pl-10 h-12 rounded-xl"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 error={Boolean(errors.email)}
@@ -87,7 +99,13 @@ export default function Login() {
             </InputGroup>
           </FormField>
 
-          <FormField label="Password" htmlFor="password" error={errors.password} required>
+          <FormField
+            label="Password"
+            htmlFor="password"
+            error={errors.password}
+            required
+            className="[&_label]:font-semibold [&_label]:text-[#111827]"
+          >
             <InputGroup>
               <InputIcon><Lock size={16} /></InputIcon>
               <Input
@@ -95,7 +113,7 @@ export default function Login() {
                 type="password"
                 autoComplete="current-password"
                 placeholder="••••••••"
-                className="pl-10"
+                className="pl-10 h-12 rounded-xl"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 error={Boolean(errors.password)}
@@ -103,7 +121,7 @@ export default function Login() {
             </InputGroup>
           </FormField>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end -mt-1">
             <Link
               href="/forgot-password"
               className="text-sm font-medium text-brand-600 hover:text-brand-700 transition-colors"
@@ -112,16 +130,19 @@ export default function Login() {
             </Link>
           </div>
 
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? 'Signing in…' : 'Sign In'}
-          </Button>
-
-          <p className="text-center text-sm text-body pt-2">
-            Don&apos;t have an account?{' '}
-            <Link href="/register" className="font-semibold text-brand-600 hover:text-brand-700">
-              Get started
-            </Link>
-          </p>
+          <button
+            type="submit"
+            disabled={loading}
+            className={[
+              'w-full h-12 mt-1 text-[15px] font-semibold text-white rounded-xl',
+              'bg-brand-600 hover:bg-brand-700 transition-colors duration-200',
+              'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-500/30',
+              'disabled:opacity-60 disabled:pointer-events-none',
+              'select-none touch-manipulation',
+            ].join(' ')}
+          >
+            {loading ? 'Signing in…' : 'Sign in'}
+          </button>
         </form>
       </AuthLayout>
     </GuestGuard>

@@ -199,6 +199,38 @@ body {
       linear-gradient(90deg, rgba(12, 12, 18, 0.03) 1px, transparent 1px);
     background-size: 48px 48px;
   }
+
+  .hero-gradient {
+    background-color: #6d28d9;
+    background-image:
+      radial-gradient(ellipse 90% 65% at 50% -15%, rgba(216, 180, 254, 0.35) 0%, transparent 52%),
+      radial-gradient(ellipse 80% 50% at 50% 10%, rgba(139, 92, 246, 0.25) 0%, transparent 58%),
+      linear-gradient(180deg, #8b5cf6 0%, #7c3aed 38%, #6d28d9 68%, #5b21b6 100%);
+  }
+
+  .hero-fab {
+    box-shadow: 0 8px 24px rgba(124, 58, 237, 0.35), 0 4px 8px rgba(76, 29, 149, 0.2);
+  }
+
+  .hero-preview-shell {
+    background: rgba(76, 29, 149, 0.38);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(216, 180, 254, 0.28);
+    box-shadow:
+      0 20px 50px rgba(49, 16, 94, 0.28),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+
+  .hero-chat-bubble-ai {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .hero-chat-bubble-user {
+    background: rgba(167, 139, 250, 0.45);
+    border: 1px solid rgba(196, 181, 253, 0.2);
+  }
 }
 
 /* Reduced motion */

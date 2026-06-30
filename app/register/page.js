@@ -3,65 +3,30 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { UserPlus, Mail, Lock, User, Store, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock } from 'lucide-react';
 import AuthLayout from '@/components/AuthLayout';
 import GuestGuard from '@/components/GuestGuard';
-import Button from '@/components/ui/Button';
-import { Input, FormField, InputGroup, InputIcon, InputToggle } from '@/components/ui/Input';
+import { Input, FormField, InputGroup, InputIcon } from '@/components/ui/Input';
 import { useAuth } from '@/context/AuthContext';
 import { ApiError, fieldErrorsToMap } from '@/lib/api';
 
 const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
 
-function PasswordField({
-  id,
-  label,
-  value,
-  onChange,
-  error,
-  hint,
-  show,
-  onToggle,
-  autoComplete,
-}) {
-  return (
-    <FormField label={label} htmlFor={id} error={error} required hint={hint}>
-      <InputGroup>
-        <InputIcon><Lock size={16} /></InputIcon>
-        <Input
-          id={id}
-          type={show ? 'text' : 'password'}
-          autoComplete={autoComplete}
-          placeholder="••••••••"
-          className="pl-10 pr-11"
-          value={value}
-          onChange={onChange}
-          error={Boolean(error)}
-        />
-        <InputToggle
-          onClick={onToggle}
-          label={show ? 'Hide password' : 'Show password'}
-        >
-          {show ? <EyeOff size={16} /> : <Eye size={16} />}
-        </InputToggle>
-      </InputGroup>
-    </FormField>
-  );
+function deriveNameFromEmail(email) {
+  const local = email.split('@')[0] || 'User';
+  const parts = local.split(/[._-]/).filter(Boolean);
+  const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+
+  if (parts.length >= 2) {
+    return { firstName: capitalize(parts[0]), lastName: capitalize(parts[1]) };
+  }
+  return { firstName: capitalize(parts[0] || 'User'), lastName: 'Owner' };
 }
 
 export default function Register() {
   const router = useRouter();
   const { register } = useAuth();
-  const [form, setForm] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    storeName: '',
-  });
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [form, setForm] = useState({ email: '', password: '', confirmPassword: '' });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
@@ -69,8 +34,6 @@ export default function Register() {
 
   const validate = () => {
     const next = {};
-    if (!form.firstName.trim()) next.firstName = 'First name is required';
-    if (!form.lastName.trim()) next.lastName = 'Last name is required';
     if (!form.email.trim()) next.email = 'Email is required';
     else if (!/^\S+@\S+\.\S+$/.test(form.email)) next.email = 'Enter a valid email address';
     if (!form.password) next.password = 'Password is required';
@@ -80,7 +43,6 @@ export default function Register() {
     }
     if (!form.confirmPassword) next.confirmPassword = 'Please confirm your password';
     else if (form.password !== form.confirmPassword) next.confirmPassword = 'Passwords do not match';
-    if (!form.storeName.trim()) next.storeName = 'Store name is required';
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -92,13 +54,14 @@ export default function Register() {
     setLoading(true);
     setErrors({});
 
+    const { firstName, lastName } = deriveNameFromEmail(form.email.trim());
+
     try {
       await register({
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
+        firstName,
+        lastName,
         email: form.email.trim(),
         password: form.password,
-        storeName: form.storeName.trim(),
       });
       router.push('/setup');
     } catch (err) {
@@ -117,10 +80,16 @@ export default function Register() {
   return (
     <GuestGuard>
       <AuthLayout
-        icon={UserPlus}
         title="Create your account"
-        subtitle="Start your free trial — set up in under 10 minutes"
-        maxWidth="max-w-lg"
+        subtitle="Sign up to get started"
+        footer={
+          <p className="text-sm text-[#6b7280]">
+            Already have an account?{' '}
+            <Link href="/login" className="font-semibold text-brand-600 hover:text-brand-700 transition-colors">
+              Sign in
+            </Link>
+          </p>
+        }
       >
         <form onSubmit={handleSubmit} className="space-y-5" noValidate>
           {errors._form && (
@@ -129,43 +98,21 @@ export default function Register() {
             </p>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField label="First name" htmlFor="firstName" error={errors.firstName} required>
-              <InputGroup>
-                <InputIcon><User size={16} /></InputIcon>
-                <Input
-                  id="firstName"
-                  autoComplete="given-name"
-                  placeholder="Jane"
-                  className="pl-10"
-                  value={form.firstName}
-                  onChange={set('firstName')}
-                  error={Boolean(errors.firstName)}
-                />
-              </InputGroup>
-            </FormField>
-
-            <FormField label="Last name" htmlFor="lastName" error={errors.lastName} required>
-              <Input
-                id="lastName"
-                autoComplete="family-name"
-                placeholder="Doe"
-                value={form.lastName}
-                onChange={set('lastName')}
-                error={Boolean(errors.lastName)}
-              />
-            </FormField>
-          </div>
-
-          <FormField label="Email" htmlFor="email" error={errors.email} required>
+          <FormField
+            label="Email"
+            htmlFor="email"
+            error={errors.email}
+            required
+            className="[&_label]:font-semibold [&_label]:text-[#111827]"
+          >
             <InputGroup>
               <InputIcon><Mail size={16} /></InputIcon>
               <Input
                 id="email"
                 type="email"
                 autoComplete="email"
-                placeholder="you@store.com"
-                className="pl-10"
+                placeholder="you@example.com"
+                className="pl-10 h-12 rounded-xl"
                 value={form.email}
                 onChange={set('email')}
                 error={Boolean(errors.email)}
@@ -173,53 +120,63 @@ export default function Register() {
             </InputGroup>
           </FormField>
 
-          <PasswordField
-            id="password"
+          <FormField
             label="Password"
-            value={form.password}
-            onChange={set('password')}
+            htmlFor="password"
             error={errors.password}
-            hint="At least 8 characters with uppercase, lowercase, and a number"
-            show={showPassword}
-            onToggle={() => setShowPassword((v) => !v)}
-            autoComplete="new-password"
-          />
-
-          <PasswordField
-            id="confirmPassword"
-            label="Confirm password"
-            value={form.confirmPassword}
-            onChange={set('confirmPassword')}
-            error={errors.confirmPassword}
-            show={showConfirmPassword}
-            onToggle={() => setShowConfirmPassword((v) => !v)}
-            autoComplete="new-password"
-          />
-
-          <FormField label="Store name" htmlFor="storeName" error={errors.storeName} required>
+            required
+            className="[&_label]:font-semibold [&_label]:text-[#111827]"
+          >
             <InputGroup>
-              <InputIcon><Store size={16} /></InputIcon>
+              <InputIcon><Lock size={16} /></InputIcon>
               <Input
-                id="storeName"
-                placeholder="Cloud Nine Vapes"
-                className="pl-10"
-                value={form.storeName}
-                onChange={set('storeName')}
-                error={Boolean(errors.storeName)}
+                id="password"
+                type="password"
+                autoComplete="new-password"
+                placeholder="••••••••"
+                className="pl-10 h-12 rounded-xl"
+                value={form.password}
+                onChange={set('password')}
+                error={Boolean(errors.password)}
               />
             </InputGroup>
           </FormField>
 
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? 'Creating account…' : 'Create Account'}
-          </Button>
+          <FormField
+            label="Confirm Password"
+            htmlFor="confirmPassword"
+            error={errors.confirmPassword}
+            required
+            className="[&_label]:font-semibold [&_label]:text-[#111827]"
+          >
+            <InputGroup>
+              <InputIcon><Lock size={16} /></InputIcon>
+              <Input
+                id="confirmPassword"
+                type="password"
+                autoComplete="new-password"
+                placeholder="••••••••"
+                className="pl-10 h-12 rounded-xl"
+                value={form.confirmPassword}
+                onChange={set('confirmPassword')}
+                error={Boolean(errors.confirmPassword)}
+              />
+            </InputGroup>
+          </FormField>
 
-          <p className="text-center text-sm text-body pt-2">
-            Already have an account?{' '}
-            <Link href="/login" className="font-semibold text-brand-600 hover:text-brand-700">
-              Sign in
-            </Link>
-          </p>
+          <button
+            type="submit"
+            disabled={loading}
+            className={[
+              'w-full h-12 mt-2 text-[15px] font-semibold text-white rounded-xl',
+              'bg-brand-600 hover:bg-brand-700 transition-colors duration-200',
+              'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-500/30',
+              'disabled:opacity-60 disabled:pointer-events-none',
+              'select-none touch-manipulation',
+            ].join(' ')}
+          >
+            {loading ? 'Creating account…' : 'Create account'}
+          </button>
         </form>
       </AuthLayout>
     </GuestGuard>
