@@ -2,14 +2,16 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, Users, ScanLine, Gift, FileClock, Settings, X, Sparkles,
+  LayoutDashboard, Users, ScanLine, Gift, FileClock, Settings, X, Sparkles, Bot,
 } from 'lucide-react';
 import Logo from '@/components/Logo';
 import { useAuth } from '@/context/AuthContext';
+import { isSidebarRouteVisible } from '@/lib/nav-visibility';
 
 const nav = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/programs', label: 'Programs', icon: Gift },
+  { href: '/assistant', label: 'AI Assistant', icon: Bot },
   { href: '/scan', label: 'Scan Customer', icon: ScanLine },
   { href: '/customers', label: 'Customers', icon: Users },
   { href: '/activity', label: 'Activity Log', icon: FileClock },
@@ -42,7 +44,7 @@ export default function Sidebar({ onClose }) {
       </div>
 
       <nav className="flex-1 px-3 py-3 space-y-1" aria-label="Main navigation">
-        {nav.map(({ href, label, icon: Icon }) => {
+        {nav.filter(({ href }) => isSidebarRouteVisible(href)).map(({ href, label, icon: Icon }) => {
           const active = path === href;
           return (
             <Link

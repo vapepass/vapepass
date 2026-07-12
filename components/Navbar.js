@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { Bell, ChevronDown, Menu, LogOut, Settings, User } from 'lucide-react';
+import { ChevronDown, Menu, LogOut, Settings, User } from 'lucide-react';
 import Avatar from '@/components/ui/Avatar';
 import { useAuth } from '@/context/AuthContext';
 
@@ -43,14 +43,6 @@ export default function Navbar({ onMenuClick }) {
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2">
-        <button
-          className="relative p-2.5 rounded-xl text-body hover:text-ink hover:bg-canvas transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-          aria-label="Notifications"
-        >
-          <Bell size={18} />
-          <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-brand-600 ring-2 ring-surface" aria-hidden="true" />
-        </button>
-
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setOpen(!open)}

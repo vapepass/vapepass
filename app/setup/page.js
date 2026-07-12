@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Store, Gift, Palette } from 'lucide-react';
+import { Store, Gift, Palette, Link2, MapPin } from 'lucide-react';
 import AuthLayout from '@/components/AuthLayout';
 import AuthGuard from '@/components/AuthGuard';
 import Button from '@/components/ui/Button';
 import { Input, FormField } from '@/components/ui/Input';
 import WalletPassPreview from '@/components/WalletPassPreview';
 import { useAuth } from '@/context/AuthContext';
-import { formToStorePayload } from '@/lib/store-utils';
+import { formToStorePayload, CANADIAN_PROVINCES, COUNTRY_OPTIONS } from '@/lib/store-utils';
 import { ApiError, fieldErrorsToMap } from '@/lib/api';
 
 const BRAND_COLORS = ['#6C3CE1', '#2563EB', '#059669', '#DC2626', '#D97706', '#111827'];
@@ -22,6 +22,10 @@ export default function Setup() {
     brandColor: '#6C3CE1',
     rewardDescription: '',
     stampGoal: '10',
+    productPageUrl: '',
+    country: 'CA',
+    province: 'BC',
+    address: '',
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -33,6 +37,10 @@ export default function Setup() {
         brandColor: store.brandColor || '#6C3CE1',
         rewardDescription: store.rewardDescription || '',
         stampGoal: String(store.stampGoal ?? 10),
+        productPageUrl: store.productPageUrl || '',
+        country: store.country || 'CA',
+        province: store.province || 'BC',
+        address: store.address || '',
       });
     }
   }, [store]);
@@ -64,7 +72,7 @@ export default function Setup() {
       <AuthLayout
         icon={Store}
         title="Set up your store"
-        subtitle="Customize your loyalty card — you can change these anytime in settings"
+        subtitle="Customize your loyalty card and connect your product page for the AI Assistant"
         maxWidth="max-w-2xl"
       >
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -129,6 +137,57 @@ export default function Setup() {
                   onChange={set('stampGoal')}
                   error={Boolean(errors.stampGoal)}
                 />
+              </FormField>
+
+              <FormField
+                label="Store website URL"
+                htmlFor="productPageUrl"
+                error={errors.productPageUrl}
+                hint="We scrape Shopify/WooCommerce inventory for the AI Assistant"
+              >
+                <div className="relative">
+                  <Link2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+                  <Input
+                    id="productPageUrl"
+                    type="url"
+                    className="pl-9"
+                    value={form.productPageUrl}
+                    onChange={set('productPageUrl')}
+                    placeholder="https://yourstore.com"
+                    error={Boolean(errors.productPageUrl)}
+                  />
+                </div>
+              </FormField>
+
+              <FormField label="Store location" htmlFor="country" hint="Determines the legal age for your AI assistant">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <select
+                    id="country"
+                    value={form.country}
+                    onChange={(e) => setForm((prev) => ({ ...prev, country: e.target.value, province: '' }))}
+                    className="w-full h-11 px-3 rounded-xl border border-line-subtle bg-white text-ink text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  >
+                    {COUNTRY_OPTIONS.map(({ code, label }) => (
+                      <option key={code} value={code}>{label}</option>
+                    ))}
+                  </select>
+                  {form.country === 'CA' ? (
+                    <select
+                      id="province"
+                      value={form.province}
+                      onChange={set('province')}
+                      className="w-full h-11 px-3 rounded-xl border border-line-subtle bg-white text-ink text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    >
+                      {CANADIAN_PROVINCES.map(({ code, label }) => (
+                        <option key={code} value={code}>{label}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="flex items-center gap-2 text-sm text-muted px-1">
+                      <MapPin size={14} /> Legal age: 21+
+                    </p>
+                  )}
+                </div>
               </FormField>
             </div>
 

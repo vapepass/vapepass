@@ -12,7 +12,7 @@ import { Input, FormField } from '@/components/ui/Input';
 import { Save, CheckCircle, CreditCard, Zap } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/context/AuthContext';
-import { storeToForm } from '@/lib/store-utils';
+import { storeToForm, CANADIAN_PROVINCES, COUNTRY_OPTIONS } from '@/lib/store-utils';
 import { ApiError, fieldErrorsToMap } from '@/lib/api';
 import { getBillingInfo, createCheckoutSession, createBillingPortal } from '@/lib/billing-api';
 
@@ -23,7 +23,7 @@ export default function Settings() {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notifs, setNotifs] = useState({ reward: true, join: true, stamp: false, weekly: true });
-  const [profile, setProfile] = useState({ name: '', email: '', phone: '', address: '' });
+  const [profile, setProfile] = useState({ name: '', email: '', phone: '', address: '', country: 'CA', province: '' });
   const [logoFile, setLogoFile] = useState(null);
   const [billingInfo, setBillingInfo] = useState(null);
   const [billingLoading, setBillingLoading] = useState(false);
@@ -34,7 +34,9 @@ export default function Settings() {
         name: store.name || '',
         email: user.email || '',
         phone: '',
-        address: '',
+        address: store.address || '',
+        country: store.country || 'CA',
+        province: store.province || '',
       });
     }
   }, [store, user]);
@@ -72,7 +74,12 @@ export default function Settings() {
   const saveProfile = async () => {
     setSaving(true);
     try {
-      await updateStore({ name: profile.name }, logoFile);
+      await updateStore({
+        name: profile.name,
+        address: profile.address,
+        country: profile.country,
+        province: profile.province,
+      }, logoFile);
       setLogoFile(null);
       setSaved(true);
       toast('Settings saved successfully', 'success');
@@ -170,9 +177,44 @@ export default function Settings() {
                 id="address"
                 value={profile.address}
                 onChange={(e) => setProfile((p) => ({ ...p, address: e.target.value }))}
-                placeholder="Not yet synced to server"
+                placeholder="1234 Main St, Vancouver, BC"
               />
             </FormField>
+
+            <FormField label="Country" htmlFor="country">
+              <select
+                id="country"
+                value={profile.country}
+                onChange={(e) => setProfile((p) => ({ ...p, country: e.target.value, province: '' }))}
+                className="w-full h-11 px-3 rounded-xl border border-line-subtle bg-white text-ink text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                {COUNTRY_OPTIONS.map(({ code, label }) => (
+                  <option key={code} value={code}>{label}</option>
+                ))}
+              </select>
+            </FormField>
+
+            {profile.country === 'CA' && (
+              <FormField label="Province / Territory" htmlFor="province" hint="Used to determine the legal purchasing age for your AI assistant">
+                <select
+                  id="province"
+                  value={profile.province}
+                  onChange={(e) => setProfile((p) => ({ ...p, province: e.target.value }))}
+                  className="w-full h-11 px-3 rounded-xl border border-line-subtle bg-white text-ink text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                >
+                  <option value="">Select province…</option>
+                  {CANADIAN_PROVINCES.map(({ code, label }) => (
+                    <option key={code} value={code}>{label}</option>
+                  ))}
+                </select>
+              </FormField>
+            )}
+
+            {storeForm.legalAge && (
+              <p className="text-xs text-muted bg-canvas border border-line-subtle rounded-xl px-4 py-3">
+                Legal purchasing age at your location: <strong>{storeForm.legalAge}+</strong> (auto-calculated)
+              </p>
+            )}
 
             <Button onClick={save} className="w-full" disabled={saving}>
               {saving ? 'Saving…' : saved ? <><CheckCircle size={15} /> Saved</> : <><Save size={15} /> Save Changes</>}

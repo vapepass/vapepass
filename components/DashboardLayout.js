@@ -1,11 +1,24 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import Navbar from '@/components/Navbar';
 import AuthGuard from '@/components/AuthGuard';
+import { isRouteTemporarilyHidden } from '@/lib/nav-visibility';
 
 export default function DashboardLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
+  const routeHidden = isRouteTemporarilyHidden(pathname);
+
+  useEffect(() => {
+    if (routeHidden) {
+      router.replace('/dashboard');
+    }
+  }, [routeHidden, router]);
+
+  if (routeHidden) return null;
 
   return (
     <AuthGuard>
