@@ -2,19 +2,16 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, Users, ScanLine, Gift, FileClock, Settings, X, Sparkles, Bot,
+  LayoutDashboard, Settings, X, Sparkles, Bot,
 } from 'lucide-react';
 import Logo from '@/components/Logo';
 import { useAuth } from '@/context/AuthContext';
 import { isSidebarRouteVisible } from '@/lib/nav-visibility';
 
+/** Visible retailer nav — loyalty routes remain in app but are hidden via nav-visibility. */
 const nav = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/programs', label: 'Programs', icon: Gift },
   { href: '/assistant', label: 'AI Assistant', icon: Bot },
-  { href: '/scan', label: 'Scan Customer', icon: ScanLine },
-  { href: '/customers', label: 'Customers', icon: Users },
-  { href: '/activity', label: 'Activity Log', icon: FileClock },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 

@@ -1,170 +1,229 @@
 'use client';
-import { useEffect, useState } from 'react';
+
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import DashboardLayout from '@/components/DashboardLayout';
 import PageHeader from '@/components/ui/PageHeader';
 import { Card, CardTitle, CardDescription } from '@/components/ui/Card';
-import { Users, UserCheck, Gift, TrendingUp, Stamp, UserPlus, Award, Key, ArrowUpRight } from 'lucide-react';
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import Badge from '@/components/ui/Badge';
+import Button from '@/components/ui/Button';
+import {
+  Bot, Package, Link2, Sparkles, Settings, CreditCard, ArrowRight, CheckCircle2, AlertCircle,
+} from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { getCustomerStats } from '@/lib/customer-api';
-import { getActivity } from '@/lib/activity-api';
-import { getDashboardAnalytics } from '@/lib/analytics-api';
-import { mapActivity } from '@/lib/mappers';
+import { getAssistantStatus } from '@/lib/assistant-api';
+import { ApiError } from '@/lib/api';
 
-const CustomTooltip = ({ active, payload, label }) => {
-  if (active && payload?.length) {
-    return (
-      <div className="px-3 py-2.5 rounded-xl text-xs bg-surface border border-line shadow-lg">
-        <p className="text-muted mb-1.5 font-medium">{label}</p>
-        {payload.map((p) => (
-          <p key={p.name} style={{ color: p.color }} className="font-semibold">{p.name}: {p.value}</p>
-        ))}
-      </div>
-    );
+function statusVariant(status) {
+  switch (status) {
+    case 'success':
+    case 'active':
+      return 'success';
+    case 'error':
+    case 'inactive':
+      return 'danger';
+    case 'syncing':
+    case 'pending':
+      return 'warning';
+    default:
+      return 'default';
   }
-  return null;
-};
+}
 
-function StatCard({ icon: Icon, label, value, change, color }) {
+function StatCard({ icon: Icon, label, value, color }) {
   return (
     <Card hover className="!p-5">
-      <div className="flex items-start justify-between">
-        <div className="flex items-start gap-4">
-          <div
-            className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: `${color}12` }}
-          >
-            <Icon size={20} style={{ color }} aria-hidden="true" />
-          </div>
-          <div>
-            <p className="text-muted text-xs font-medium uppercase tracking-wider mb-1">{label}</p>
-            <p className="text-ink text-2xl font-bold tracking-tight tabular-nums">{value}</p>
-            {change && (
-              <p className="text-xs mt-1.5 text-success-600 font-medium flex items-center gap-0.5">
-                <ArrowUpRight size={12} aria-hidden="true" /> {change} this month
-              </p>
-            )}
-          </div>
+      <div className="flex items-start gap-4">
+        <div
+          className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ background: `${color}12` }}
+        >
+          <Icon size={20} style={{ color }} aria-hidden="true" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-muted text-xs font-medium uppercase tracking-wider mb-1">{label}</p>
+          <p className="text-ink text-2xl font-bold tracking-tight tabular-nums truncate">{value}</p>
         </div>
       </div>
     </Card>
   );
 }
 
-function ActivityItem({ item }) {
-  const icons = {
-    stamp: <Stamp size={15} className="text-brand-600" />,
-    join: <UserPlus size={15} className="text-success-600" />,
-    reward: <Award size={15} className="text-warning-600" />,
-    code: <Key size={15} className="text-muted" />,
-  };
-  const colors = {
-    stamp: 'bg-brand-50',
-    join: 'bg-success-50',
-    reward: 'bg-warning-50',
-    code: 'bg-canvas',
-  };
-
+function ChecklistItem({ ok, label }) {
   return (
-    <div className="flex items-center gap-3 py-3.5 border-b border-line-subtle last:border-0">
-      <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${colors[item.icon]}`}>
-        {icons[item.icon]}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-ink text-sm font-medium">{item.customer}</p>
-        <p className="text-body text-xs truncate mt-0.5">{item.detail}</p>
-      </div>
-      <p className="text-muted text-xs flex-shrink-0 tabular-nums">{item.time}</p>
-    </div>
+    <li className="flex items-center gap-2.5 text-sm">
+      {ok ? (
+        <CheckCircle2 size={16} className="text-success-600 flex-shrink-0" aria-hidden="true" />
+      ) : (
+        <AlertCircle size={16} className="text-muted flex-shrink-0" aria-hidden="true" />
+      )}
+      <span className={ok ? 'text-ink' : 'text-muted'}>{label}</span>
+    </li>
   );
 }
 
 export default function Dashboard() {
   const { store } = useAuth();
-  const [stats, setStats] = useState({ total: 0, active: 0, rewarded: 0 });
-  const [recentActivity, setRecentActivity] = useState([]);
-  const [growth, setGrowth] = useState([]);
-  const [visitActivity, setVisitActivity] = useState([]);
+  const [status, setStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      const assistantStatus = await getAssistantStatus();
+      setStatus(assistantStatus);
+      setError('');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Unable to load assistant status');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    getCustomerStats().then(setStats).catch(() => {});
-    getActivity({ limit: 6 })
-      .then((data) => setRecentActivity(data.activities.map(mapActivity)))
-      .catch(() => {});
-    getDashboardAnalytics()
-      .then((data) => {
-        setGrowth(data.growth || []);
-        setVisitActivity(data.loyalty || []);
-      })
-      .catch(() => {});
-  }, []);
+    load();
+  }, [load]);
+
+  const planLabel = (store?.subscriptionStatus || 'trial').replace('_', ' ');
+  const syncLabel = status?.inventorySyncStatus || 'idle';
+  const productCount = status?.inventoryProductCount ?? 0;
+  const assistantLive = Boolean(status?.assistantEnabled);
 
   return (
     <DashboardLayout>
       <PageHeader
         title="Dashboard"
-        description={store?.name ? `Here's what's happening at ${store.name}` : "Here's what's happening at your store"}
+        description={
+          store?.name
+            ? `AI Flavor Sommelier overview for ${store.name}`
+            : 'AI Flavor Sommelier overview for your store'
+        }
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-        <StatCard icon={Users} label="Total Customers" value={stats.total} color="#7c3aed" />
-        <StatCard icon={UserCheck} label="Active Members" value={stats.active} color="#3b82f6" />
-        <StatCard icon={Gift} label="Rewards Ready" value={stats.rewarded} color="#f59e0b" />
-        <StatCard icon={TrendingUp} label="Plan" value={store?.subscriptionStatus || 'trial'} color="#10b981" />
+        <StatCard
+          icon={Bot}
+          label="AI Assistant"
+          value={loading ? '…' : assistantLive ? 'Live' : 'Setup needed'}
+          color="#7c3aed"
+        />
+        <StatCard
+          icon={Package}
+          label="Products Synced"
+          value={loading ? '…' : productCount}
+          color="#3b82f6"
+        />
+        <StatCard
+          icon={Link2}
+          label="Inventory Sync"
+          value={loading ? '…' : syncLabel}
+          color="#f59e0b"
+        />
+        <StatCard
+          icon={CreditCard}
+          label="Plan"
+          value={planLabel}
+          color="#10b981"
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
-        <Card>
-          <CardTitle>Customer Growth</CardTitle>
-          <CardDescription>Total customers over time</CardDescription>
-          <div className="mt-5 h-44 min-h-[176px] min-w-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={growth} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-                <defs>
-                  <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#7c3aed" stopOpacity={0.2} />
-                    <stop offset="100%" stopColor="#7c3aed" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f1f5" vertical={false} />
-                <XAxis dataKey="month" tick={{ fill: '#9494a6', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#9494a6', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="customers" stroke="#7c3aed" fill="url(#g1)" strokeWidth={2} dot={false} name="Customers" />
-              </AreaChart>
-            </ResponsiveContainer>
+        <Card className="space-y-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle>AI Flavor Sommelier</CardTitle>
+              <CardDescription className="mt-1">
+                Compliant chatbot powered by your live store inventory
+              </CardDescription>
+            </div>
+            <Badge variant={statusVariant(assistantLive ? 'success' : 'inactive')}>
+              {assistantLive ? 'Live' : 'Inactive'}
+            </Badge>
+          </div>
+
+          {error ? (
+            <p className="text-sm text-danger-600 bg-danger-50 border border-red-200 rounded-xl px-4 py-3">
+              {error}
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              <ChecklistItem ok={Boolean(status?.productPageUrl)} label="Store website URL connected" />
+              <ChecklistItem
+                ok={status?.inventorySyncStatus === 'success'}
+                label="Inventory synced to MongoDB"
+              />
+              <ChecklistItem
+                ok={(status?.recommendableProductCount || 0) > 0}
+                label="Products available for recommendations"
+              />
+              <ChecklistItem ok={assistantLive} label="Assistant live on embed widget" />
+            </ul>
+          )}
+
+          <div className="flex flex-wrap gap-3 pt-1">
+            <Button as={Link} href="/assistant">
+              Manage AI Assistant <ArrowRight size={16} />
+            </Button>
+            <Button as={Link} href="/settings" variant="secondary">
+              <Settings size={15} /> Store Settings
+            </Button>
           </div>
         </Card>
 
-        <Card>
-          <CardTitle>Visit Activity</CardTitle>
-          <CardDescription>Stamps issued and rewards earned</CardDescription>
-          <div className="mt-5 h-44 min-h-[176px] min-w-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={visitActivity} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f1f5" vertical={false} />
-                <XAxis dataKey="month" tick={{ fill: '#9494a6', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#9494a6', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="stamps" fill="#7c3aed" radius={[4, 4, 0, 0]} name="Stamps" />
-                <Bar dataKey="rewards" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Rewards" />
-              </BarChart>
-            </ResponsiveContainer>
+        <Card className="space-y-5">
+          <div className="flex items-start gap-3">
+            <div className="w-11 h-11 rounded-xl gradient-brand flex items-center justify-center flex-shrink-0">
+              <Sparkles size={20} className="text-white" aria-hidden="true" />
+            </div>
+            <div>
+              <CardTitle>Store & subscription</CardTitle>
+              <CardDescription className="mt-1">
+                Business profile, billing, and plan status
+              </CardDescription>
+            </div>
           </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="rounded-xl bg-canvas border border-line-subtle px-4 py-3.5">
+              <p className="text-[11px] text-muted uppercase tracking-wider mb-1">Store</p>
+              <p className="text-sm font-semibold text-ink truncate">{store?.name || '—'}</p>
+            </div>
+            <div className="rounded-xl bg-canvas border border-line-subtle px-4 py-3.5">
+              <p className="text-[11px] text-muted uppercase tracking-wider mb-1">Plan</p>
+              <p className="text-sm font-semibold text-ink capitalize">{planLabel}</p>
+            </div>
+            <div className="rounded-xl bg-canvas border border-line-subtle px-4 py-3.5">
+              <p className="text-[11px] text-muted uppercase tracking-wider mb-1">Products</p>
+              <p className="text-sm font-semibold text-ink tabular-nums">{productCount}</p>
+            </div>
+            <div className="rounded-xl bg-canvas border border-line-subtle px-4 py-3.5">
+              <p className="text-[11px] text-muted uppercase tracking-wider mb-1">Last sync</p>
+              <p className="text-sm font-semibold text-ink">
+                {status?.lastInventorySyncAt
+                  ? new Date(status.lastInventorySyncAt).toLocaleDateString()
+                  : '—'}
+              </p>
+            </div>
+          </div>
+
+          <Button as={Link} href="/settings" variant="secondary" className="w-full sm:w-auto">
+            <CreditCard size={15} /> Manage billing & profile
+          </Button>
         </Card>
       </div>
 
-      <Card>
-        <CardTitle>Recent Activity</CardTitle>
-        <CardDescription>Latest customer interactions</CardDescription>
-        <div className="mt-4">
-          {recentActivity.length === 0 ? (
-            <p className="text-sm text-body py-4">No recent activity yet.</p>
-          ) : (
-            recentActivity.map((a) => <ActivityItem key={a.id} item={a} />)
+      {status?.productPageUrl && (
+        <Card>
+          <CardTitle>Connected storefront</CardTitle>
+          <CardDescription className="mt-1">
+            Inventory is scraped from this URL for AI recommendations
+          </CardDescription>
+          <p className="mt-4 text-sm text-ink break-all font-medium">{status.productPageUrl}</p>
+          {status.detectedPlatform && (
+            <p className="text-xs text-muted mt-2 capitalize">Platform: {status.detectedPlatform}</p>
           )}
-        </div>
-      </Card>
+        </Card>
+      )}
     </DashboardLayout>
   );
 }
