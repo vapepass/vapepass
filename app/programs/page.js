@@ -5,7 +5,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import { Input, FormField } from '@/components/ui/Input';
-import WalletPassPreview from '@/components/WalletPassPreview';
+import StoreBrandPreview from '@/components/StoreBrandPreview';
 import QrCodeImage from '@/components/QrCodeImage';
 import { Save, CheckCircle, Link2, Copy } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
@@ -62,8 +62,8 @@ export default function Programs() {
   return (
     <DashboardLayout>
       <PageHeader
-        title="Loyalty Programs"
-        description="Changes update the wallet pass for all new customers"
+        title="Rewards Programs"
+        description="Configure visit goals and rewards for new customers"
       />
 
       {joinUrl && (
@@ -79,7 +79,7 @@ export default function Programs() {
               </p>
               <p className="text-xs text-body mt-2 break-all">{joinUrl}</p>
               <p className="text-xs text-muted mt-2">
-                Customers scan this QR in-store, enter their age verification code, and receive their wallet pass.
+                Customers scan this QR in-store, enter their age verification code, and join your rewards program.
               </p>
               <Button variant="secondary" size="sm" className="mt-4" onClick={copyJoinLink}>
                 <Copy size={14} /> Copy Link
@@ -184,8 +184,8 @@ export default function Programs() {
         </Card>
 
         <div className="lg:sticky lg:top-24 lg:self-start">
-          <p className="text-xs text-muted font-semibold uppercase tracking-wider mb-4">Live Pass Preview</p>
-          <WalletPassPreview
+          <p className="text-xs text-muted font-semibold uppercase tracking-wider mb-4">Live Brand Preview</p>
+          <StoreBrandPreview
             store={{
               name: form.name,
               color: form.color,

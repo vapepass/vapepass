@@ -2,11 +2,10 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import WalletPassPreview from '@/components/WalletPassPreview';
+import StoreBrandPreview from '@/components/StoreBrandPreview';
 import QrCodeImage from '@/components/QrCodeImage';
 import Spinner from '@/components/ui/Spinner';
-import { Wallet, Apple, PartyPopper } from 'lucide-react';
-import Button from '@/components/ui/Button';
+import { PartyPopper } from 'lucide-react';
 import { getCustomerCard } from '@/lib/public-api';
 
 function CustomerCardContent() {
@@ -19,14 +18,14 @@ function CustomerCardContent() {
 
   useEffect(() => {
     if (!customerId) {
-      setError('Invalid card link');
+      setError('Invalid member link');
       setLoading(false);
       return;
     }
 
     getCustomerCard(customerId)
       .then(setData)
-      .catch(() => setError('Unable to load your loyalty card'))
+      .catch(() => setError('Unable to load your member profile'))
       .finally(() => setLoading(false));
   }, [customerId]);
 
@@ -39,7 +38,7 @@ function CustomerCardContent() {
   }
 
   if (error || !data) {
-    return <p className="text-center text-body">{error || 'Card not found'}</p>;
+    return <p className="text-center text-body">{error || 'Member profile not found'}</p>;
   }
 
   const { customer, store } = data;
@@ -52,10 +51,10 @@ function CustomerCardContent() {
 
       <h1 className="text-2xl sm:text-3xl font-bold text-ink tracking-tight mb-2">You&apos;re in!</h1>
       <p className="text-body mb-8">
-        Add your card below to start earning rewards at {store.name}.
+        Show your QR code at checkout to track visits and earn rewards at {store.name}.
       </p>
 
-      <WalletPassPreview
+      <StoreBrandPreview
         store={{
           name: store.name,
           color: store.brandColor,
@@ -71,39 +70,16 @@ function CustomerCardContent() {
         <QrCodeImage
           value={`vapepass:${customer.passIdentifier}`}
           size={180}
-          alt="Customer loyalty pass QR code"
+          alt="Customer checkout QR code"
         />
       </div>
 
       <p className="text-xs text-muted mt-4 font-mono break-all">
-        Pass ID: vapepass:{customer.passIdentifier}
+        Member ID: vapepass:{customer.passIdentifier}
       </p>
 
-      <div className="flex flex-col sm:flex-row gap-3 mt-8">
-        <Button
-          variant="dark"
-          className="flex-1"
-          as="a"
-          href={customer.appleWalletUrl || '#'}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Apple size={18} /> Add to Apple Wallet
-        </Button>
-        <Button
-          variant="secondary"
-          className="flex-1"
-          as="a"
-          href={customer.googleWalletUrl || '#'}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Wallet size={18} /> Add to Google Wallet
-        </Button>
-      </div>
-
       <p className="text-xs text-muted mt-6">
-        Add to your wallet above, or scan the QR code when you visit the store.
+        Keep this page handy, or show the QR code whenever you visit the store.
       </p>
     </>
   );

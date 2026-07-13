@@ -22,7 +22,7 @@ export default function AdminSettingsPage() {
           <p className="text-sm font-semibold text-ink mb-2">Platform billing</p>
           <p className="text-sm text-body">Store subscription: $99/month via Stripe</p>
           <p className="text-xs text-muted mt-2">
-            PassKit wallet passes require PASSKIT_API_KEY and PASSKIT_API_SECRET in backend .env.
+            AI Assistant requires OPENAI_API_KEY and SCRAPINGBEE_API_KEY in backend .env.
           </p>
         </div>
 

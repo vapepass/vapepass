@@ -15,7 +15,7 @@ export const mockCustomers = [
 
 export const mockActivity = [
   { id: 1, type: 'stamp', customer: 'Jordan Lee', time: '2 min ago', detail: 'Stamp added — 8/10', icon: 'stamp' },
-  { id: 2, type: 'join', customer: 'Avery Chen', time: '1 hr ago', detail: 'Joined loyalty program', icon: 'join' },
+  { id: 2, type: 'join', customer: 'Avery Chen', time: '1 hr ago', detail: 'Joined rewards program', icon: 'join' },
   { id: 3, type: 'reward', customer: 'Sam Torres', time: '3 hrs ago', detail: 'Reward earned — Free 30ml Juice', icon: 'reward' },
   { id: 4, type: 'stamp', customer: 'Riley Jackson', time: '5 hrs ago', detail: 'Stamp added — 9/10', icon: 'stamp' },
   { id: 5, type: 'code', customer: 'Taylor Nguyen', time: '1 day ago', detail: 'Age verification code issued', icon: 'code' },

@@ -6,23 +6,22 @@ import {
   ArrowRight,
   ArrowLeft,
   QrCode,
-  Smartphone,
   Gift,
   Bell,
   Sparkles,
   Users,
-  Wallet,
+  UserCheck,
   Stamp,
   TrendingUp,
-  Apple,
   CheckCircle,
   Tag,
   Calendar,
+  Bot,
+  ShieldCheck,
 } from 'lucide-react';
 import Logo from '@/components/Logo';
 import Button from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import WalletPassPreview from '@/components/WalletPassPreview';
 import Progress from '@/components/ui/Progress';
 import {
   demoStore,
@@ -78,14 +77,14 @@ function StepWelcome() {
         See how VapePass works
       </h2>
       <p className="text-body text-lg max-w-lg mx-auto leading-relaxed">
-        Take a quick tour and discover how vape shops replace paper punch cards with
-        digital wallet loyalty passes — no app download required.
+        Take a quick tour and discover how vape shops use AI flavor recommendations
+        and built-in compliance — no custom app required.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-10 text-left">
         {[
-          { icon: QrCode, label: 'Scan to join', desc: 'Customers scan a QR code in-store' },
-          { icon: Smartphone, label: 'Wallet ready', desc: 'Card lives in Apple & Google Wallet' },
-          { icon: Gift, label: 'Auto rewards', desc: 'Stamps and rewards track themselves' },
+          { icon: Bot, label: 'AI Sommelier', desc: 'Personalized flavor recs from live inventory' },
+          { icon: ShieldCheck, label: 'Compliance-ready', desc: 'Age gates and warnings built in' },
+          { icon: Gift, label: 'Visit rewards', desc: 'Track visits and unlock rewards automatically' },
         ].map(({ icon: Icon, label, desc }) => (
           <div key={label} className="flex items-start gap-3 p-4 rounded-xl bg-brand-50/60 border border-brand-100">
             <div className="w-9 h-9 rounded-lg bg-brand-100 flex items-center justify-center flex-shrink-0">
@@ -111,7 +110,7 @@ function StepQrScan() {
         </h2>
         <p className="text-body leading-relaxed mb-6">
           Print a QR code and place it at checkout. When a customer scans it with their phone,
-          they&apos;re instantly guided to join your loyalty program — no app to download.
+          they&apos;re instantly guided to join your rewards program — no app to download.
         </p>
         <ul className="space-y-3">
           {['Works on any smartphone camera', 'No app store download needed', 'Takes under 30 seconds'].map((item) => (
@@ -158,44 +157,58 @@ function StepQrScan() {
             <div className="absolute inset-x-0 top-1/2 h-0.5 bg-brand-600/60 animate-pulse" aria-hidden="true" />
           </div>
           <p className="text-sm font-medium text-ink">{demoStore.name}</p>
-          <p className="text-xs text-muted mt-1">Scan to join loyalty program</p>
+          <p className="text-xs text-muted mt-1">Scan to join rewards program</p>
         </Card>
       </div>
     </div>
   );
 }
 
-function StepWallet() {
+function StepSommelier() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
       <div className="order-2 lg:order-1 flex justify-center">
-        <WalletPassPreview
-          store={{
-            ...demoStore,
-            stamps: 3,
-            customerName: 'Alex Johnson',
-          }}
-        />
+        <Card className="w-full max-w-sm !p-6 shadow-lg">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-10 h-10 rounded-xl gradient-brand flex items-center justify-center">
+              <Bot size={20} className="text-white" aria-hidden="true" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-ink">AI Flavor Sommelier</p>
+              <p className="text-xs text-muted">Live inventory recommendations</p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <div className="rounded-2xl rounded-tl-md bg-canvas border border-line px-4 py-3 text-sm text-body">
+              Looking for something fruity with ice?
+            </div>
+            <div className="rounded-2xl rounded-tr-md bg-brand-50 border border-brand-100 px-4 py-3 text-sm text-ink">
+              From our current inventory, you might like: Mango Ice, Guava Frost, or Berry Blast.
+            </div>
+          </div>
+          <p className="text-xs text-muted mt-4 text-center">Demo preview — recommendations use your store&apos;s products only.</p>
+        </Card>
       </div>
       <div className="order-1 lg:order-2">
         <h2 className="text-2xl sm:text-3xl font-bold text-ink tracking-tight mb-4">
-          Add to Apple Wallet or Google Wallet
+          AI Flavor Sommelier on your site
         </h2>
         <p className="text-body leading-relaxed mb-6">
-          After signing up, customers tap one button to save their branded loyalty card
-          directly to their phone wallet. It&apos;s always accessible — never lost in a drawer.
+          Embed the chatbot on your storefront. It asks the right questions, enforces age
+          verification, and recommends products from your live inventory — never invented SKUs.
         </p>
-        <div className="flex flex-col sm:flex-row gap-3 mb-6">
-          <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-ink text-white text-sm font-semibold">
-            <Apple size={18} /> Apple Wallet
-          </div>
-          <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-surface border border-line text-sm font-semibold text-ink">
-            <Wallet size={18} /> Google Wallet
-          </div>
-        </div>
-        <p className="text-xs text-muted">
-          Demo preview — this is what your customers see after joining.
-        </p>
+        <ul className="space-y-3">
+          {[
+            'Age-gated before any product talk',
+            'Synced to Shopify / WooCommerce inventory',
+            'Compliant nicotine warnings every session',
+          ].map((item) => (
+            <li key={item} className="flex items-center gap-2.5 text-sm text-ink">
+              <CheckCircle size={16} className="text-brand-600 flex-shrink-0" />
+              {item}
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );
@@ -220,8 +233,8 @@ function StepRewards() {
           Earn rewards automatically
         </h2>
         <p className="text-body leading-relaxed mb-6">
-          Staff scan the customer&apos;s wallet QR at checkout. Stamps update in real-time
-          on the pass — when they hit the goal, the reward unlocks instantly.
+          Staff scan the customer&apos;s QR at checkout. Visits update in real-time —
+          when they hit the goal, the reward unlocks instantly.
         </p>
         <div className="px-4 py-4 rounded-xl bg-brand-50 border border-brand-100 mb-6">
           <p className="text-sm font-semibold text-brand-700">
@@ -238,8 +251,8 @@ function StepRewards() {
       </div>
 
       <Card className="!p-6">
-        <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-4">Live stamp counter</p>
-        <div className="flex flex-wrap gap-2 mb-6" aria-live="polite" aria-label={`${stamps} of ${demoStore.stampGoal} stamps`}>
+        <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-4">Live visit counter</p>
+        <div className="flex flex-wrap gap-2 mb-6" aria-live="polite" aria-label={`${stamps} of ${demoStore.stampGoal} visits`}>
           {Array.from({ length: demoStore.stampGoal }, (_, i) => (
             <div
               key={i}
@@ -265,7 +278,7 @@ function StepRewards() {
   );
 }
 
-const statIcons = { users: Users, wallet: Wallet, gift: Gift, stamp: Stamp };
+const statIcons = { users: Users, members: UserCheck, gift: Gift, stamp: Stamp };
 
 function StepAnalytics() {
   const maxCustomers = Math.max(...demoChartData.map((d) => d.customers));
@@ -277,7 +290,7 @@ function StepAnalytics() {
           Your analytics dashboard
         </h2>
         <p className="text-body max-w-xl mx-auto">
-          Track customers, stamps, and redemptions from one place. Demo data shown below — not connected to a real store.
+          Track customers, visits, and redemptions from one place. Demo data shown below — not connected to a real store.
         </p>
       </div>
 
@@ -331,13 +344,13 @@ function StepNotifications() {
           Keep customers engaged
         </h2>
         <p className="text-body leading-relaxed mb-6">
-          VapePass sends push notifications through wallet passes and keeps your store
-          top-of-mind with reward alerts, special offers, and loyalty reminders.
+          VapePass helps you stay top-of-mind with reward alerts, special offers,
+          and visit reminders — so customers come back.
         </p>
         <div className="flex items-center gap-3 p-4 rounded-xl bg-brand-50 border border-brand-100">
           <Bell size={20} className="text-brand-600 flex-shrink-0" />
           <p className="text-sm text-body">
-            Notifications appear on the customer&apos;s lock screen — no separate app needed.
+            Stay connected with customers without building a custom mobile app.
           </p>
         </div>
       </div>
@@ -384,10 +397,10 @@ function StepCta() {
         <Sparkles size={28} className="text-white" aria-hidden="true" />
       </div>
       <h2 className="text-3xl sm:text-4xl font-bold text-ink tracking-tight mb-4">
-        Ready to launch your loyalty program?
+        Ready to launch your AI assistant?
       </h2>
       <p className="text-body text-lg max-w-lg mx-auto mb-10">
-        Join hundreds of vape shops replacing paper punch cards with digital wallet passes.
+        Join vape shops using VapePass for compliant AI recommendations and customer rewards.
         Set up in under 10 minutes — no credit card required.
       </p>
       <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -410,7 +423,7 @@ function StepCta() {
 const stepComponents = [
   StepWelcome,
   StepQrScan,
-  StepWallet,
+  StepSommelier,
   StepRewards,
   StepAnalytics,
   StepNotifications,

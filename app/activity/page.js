@@ -57,7 +57,7 @@ export default function ActivityLog() {
     <DashboardLayout>
       <PageHeader
         title="Activity Log"
-        description="Compliance and loyalty event history"
+        description="Compliance and rewards event history"
       />
 
       <div className="flex items-center gap-2 mb-6">

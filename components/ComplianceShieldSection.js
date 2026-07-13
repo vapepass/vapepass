@@ -17,7 +17,7 @@ const features = [
   {
     icon: FileWarning,
     title: 'Mandatory Warnings',
-    description: 'Federal nicotine health warnings are baked into every chat window and pass.',
+    description: 'Federal nicotine health warnings are baked into every chat window.',
   },
 ];
 

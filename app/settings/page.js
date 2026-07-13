@@ -4,7 +4,6 @@ import DashboardLayout from '@/components/DashboardLayout';
 import PageHeader from '@/components/ui/PageHeader';
 import { Card, CardTitle } from '@/components/ui/Card';
 import Tabs from '@/components/ui/Tabs';
-import Toggle from '@/components/ui/Toggle';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import Avatar from '@/components/ui/Avatar';
@@ -22,7 +21,6 @@ export default function Settings() {
   const [tab, setTab] = useState('profile');
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [notifs, setNotifs] = useState({ reward: true, join: true, stamp: false, weekly: true });
   const [profile, setProfile] = useState({ name: '', email: '', phone: '', address: '', country: 'CA', province: '' });
   const [logoFile, setLogoFile] = useState(null);
   const [billingInfo, setBillingInfo] = useState(null);
@@ -107,7 +105,6 @@ export default function Settings() {
   const tabs = [
     { id: 'profile', label: 'Business Profile' },
     { id: 'billing', label: 'Billing' },
-    { id: 'notifications', label: 'Notifications' },
     { id: 'security', label: 'Security' },
   ];
 
@@ -267,30 +264,6 @@ export default function Settings() {
               </p>
             </Card>
           </div>
-        )}
-
-        {tab === 'notifications' && (
-          <Card className="animate-fade-in divide-y divide-line-subtle">
-            {[
-              { key: 'reward', title: 'Reward Earned', desc: 'Notify when a customer hits their stamp goal' },
-              { key: 'join', title: 'New Customer Joined', desc: 'Notify when a customer joins your program' },
-              { key: 'stamp', title: 'Stamp Added', desc: 'Notify on every stamp scan' },
-              { key: 'weekly', title: 'Weekly Summary', desc: 'Weekly report with customer and stamp stats' },
-            ].map(({ key, title, desc }) => (
-              <div key={key} className="flex items-center justify-between py-5 first:pt-0 last:pb-0 gap-4">
-                <div>
-                  <p className="text-ink text-sm font-medium">{title}</p>
-                  <p className="text-body text-xs mt-0.5">{desc}</p>
-                </div>
-                <Toggle
-                  checked={notifs[key]}
-                  onChange={(v) => setNotifs((n) => ({ ...n, [key]: v }))}
-                  label={title}
-                  id={`notif-${key}`}
-                />
-              </div>
-            ))}
-          </Card>
         )}
 
         {tab === 'security' && (

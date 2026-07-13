@@ -114,7 +114,7 @@ export default function Scan() {
     <DashboardLayout>
       <PageHeader
         title="Scan Customer"
-        description="Scan the QR code on the customer's wallet pass"
+        description="Scan the customer's QR code at checkout"
       />
 
       <div className="max-w-md mx-auto space-y-6">
@@ -160,8 +160,8 @@ export default function Scan() {
 
             <ol className="space-y-3 mb-6" aria-label="Scan instructions">
               {[
-                'Customer opens Apple or Google Wallet',
-                'Wallet card shows QR code on face',
+                'Customer opens their member QR on their phone',
+                'QR code is ready to scan at checkout',
                 'Point device camera at QR code',
                 'System identifies customer automatically',
               ].map((step, i) => (
@@ -268,7 +268,7 @@ function ManualLookup({ onFound }) {
 
   return (
     <div className="border-t border-line pt-5">
-      <p className="text-xs text-muted mb-2">Manual QR / pass ID lookup</p>
+      <p className="text-xs text-muted mb-2">Manual QR / member ID lookup</p>
       <div className="flex gap-2">
         <input
           className="flex-1 h-11 px-3 text-sm border border-line rounded-xl"

@@ -5,7 +5,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import Spinner from '@/components/ui/Spinner';
 import { getAdminOverview } from '@/lib/admin-api';
-import { Building2, Users, Wallet, Activity } from 'lucide-react';
+import { Building2, Users, UserCheck, Activity } from 'lucide-react';
 
 const STATUS_LABELS = {
   trial: 'Trial',
@@ -42,7 +42,7 @@ export default function AdminOverviewPage() {
         {[
           { icon: Building2, label: 'Total Stores', value: data.totalStores, color: '#7c3aed' },
           { icon: Users, label: 'Store Owners', value: data.totalOwners, color: '#3b82f6' },
-          { icon: Wallet, label: 'Total Customers', value: data.totalCustomers, color: '#10b981' },
+          { icon: UserCheck, label: 'Total Customers', value: data.totalCustomers, color: '#10b981' },
         ].map(({ icon: Icon, label, value, color }) => (
           <Card key={label} className="!p-5">
             <div className="flex items-center gap-4">

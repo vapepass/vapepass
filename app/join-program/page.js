@@ -76,7 +76,7 @@ function JoinProgramContent() {
     return (
       <Card>
         <p className="text-center text-body text-sm">
-          Invalid join link. Ask the store for their loyalty program QR code or link.
+          Invalid join link. Ask the store for their rewards program QR code or link.
         </p>
       </Card>
     );
@@ -87,7 +87,7 @@ function JoinProgramContent() {
       <div className="flex flex-col items-center text-center mb-8">
         <Logo size={48} />
         <h1 className="text-2xl sm:text-3xl font-bold text-ink tracking-tight mt-6 mb-2">{store.name}</h1>
-        <p className="text-body">Join our loyalty program</p>
+        <p className="text-body">Join our rewards program</p>
       </div>
 
       <Card>

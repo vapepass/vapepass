@@ -7,7 +7,7 @@ import AuthLayout from '@/components/AuthLayout';
 import AuthGuard from '@/components/AuthGuard';
 import Button from '@/components/ui/Button';
 import { Input, FormField } from '@/components/ui/Input';
-import WalletPassPreview from '@/components/WalletPassPreview';
+import StoreBrandPreview from '@/components/StoreBrandPreview';
 import { useAuth } from '@/context/AuthContext';
 import { formToStorePayload, CANADIAN_PROVINCES, COUNTRY_OPTIONS } from '@/lib/store-utils';
 import { ApiError, fieldErrorsToMap } from '@/lib/api';
@@ -72,7 +72,7 @@ export default function Setup() {
       <AuthLayout
         icon={Store}
         title="Set up your store"
-        subtitle="Customize your loyalty card and connect your product page for the AI Assistant"
+        subtitle="Customize your store branding and connect your product page for the AI Assistant"
         maxWidth="max-w-2xl"
       >
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -195,7 +195,7 @@ export default function Setup() {
               <p className="text-xs font-medium text-muted uppercase tracking-wider mb-4 flex items-center gap-1.5">
                 <Palette size={12} /> Live preview
               </p>
-              <WalletPassPreview
+              <StoreBrandPreview
                 store={{
                   name: form.storeName,
                   color: form.brandColor,

@@ -1,7 +1,8 @@
 'use client';
 import { Gift } from 'lucide-react';
 
-export default function WalletPassPreview({ store = {} }) {
+/** Store branding + visit progress preview for setup and member screens. */
+export default function StoreBrandPreview({ store = {} }) {
   const {
     name = 'Your Store',
     color = '#7c3aed',
@@ -28,7 +29,7 @@ export default function WalletPassPreview({ store = {} }) {
       <div className="flex items-start justify-between mb-6 relative">
         <div>
           <p className="text-white font-bold text-xl tracking-tight">{name}</p>
-          <p className="text-white/70 text-sm mt-0.5">VIP Loyalty Card</p>
+          <p className="text-white/70 text-sm mt-0.5">Member rewards</p>
         </div>
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white bg-white/20 backdrop-blur-sm flex-shrink-0">
           <Gift size={13} aria-hidden="true" />
@@ -36,7 +37,7 @@ export default function WalletPassPreview({ store = {} }) {
         </div>
       </div>
 
-      <div className="flex gap-2 mb-6 flex-wrap relative" aria-label={`${stamps} of ${stampGoal} stamps`}>
+      <div className="flex gap-2 mb-6 flex-wrap relative" aria-label={`${stamps} of ${stampGoal} visits`}>
         {Array.from({ length: stampGoal }, (_, i) => (
           <div
             key={i}

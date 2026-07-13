@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import PageHeader from '@/components/ui/PageHeader';
 import { Card, CardTitle, CardDescription } from '@/components/ui/Card';
-import { Users, Wallet, Gift, TrendingUp, Stamp, UserPlus, Award, Key, ArrowUpRight } from 'lucide-react';
+import { Users, UserCheck, Gift, TrendingUp, Stamp, UserPlus, Award, Key, ArrowUpRight } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { useAuth } from '@/context/AuthContext';
 import { getCustomerStats } from '@/lib/customer-api';
@@ -84,7 +84,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState({ total: 0, active: 0, rewarded: 0 });
   const [recentActivity, setRecentActivity] = useState([]);
   const [growth, setGrowth] = useState([]);
-  const [loyalty, setLoyalty] = useState([]);
+  const [visitActivity, setVisitActivity] = useState([]);
 
   useEffect(() => {
     getCustomerStats().then(setStats).catch(() => {});
@@ -94,7 +94,7 @@ export default function Dashboard() {
     getDashboardAnalytics()
       .then((data) => {
         setGrowth(data.growth || []);
-        setLoyalty(data.loyalty || []);
+        setVisitActivity(data.loyalty || []);
       })
       .catch(() => {});
   }, []);
@@ -108,7 +108,7 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <StatCard icon={Users} label="Total Customers" value={stats.total} color="#7c3aed" />
-        <StatCard icon={Wallet} label="Active Passes" value={stats.active} color="#3b82f6" />
+        <StatCard icon={UserCheck} label="Active Members" value={stats.active} color="#3b82f6" />
         <StatCard icon={Gift} label="Rewards Ready" value={stats.rewarded} color="#f59e0b" />
         <StatCard icon={TrendingUp} label="Plan" value={store?.subscriptionStatus || 'trial'} color="#10b981" />
       </div>
@@ -137,11 +137,11 @@ export default function Dashboard() {
         </Card>
 
         <Card>
-          <CardTitle>Loyalty Activity</CardTitle>
+          <CardTitle>Visit Activity</CardTitle>
           <CardDescription>Stamps issued and rewards earned</CardDescription>
           <div className="mt-5 h-44 min-h-[176px] min-w-0">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={loyalty} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+              <BarChart data={visitActivity} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f1f5" vertical={false} />
                 <XAxis dataKey="month" tick={{ fill: '#9494a6', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#9494a6', fontSize: 11 }} axisLine={false} tickLine={false} />

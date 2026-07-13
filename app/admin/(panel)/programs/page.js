@@ -20,7 +20,7 @@ export default function AdminProgramsPage() {
 
   return (
     <>
-      <PageHeader title="Programs" description="Loyalty programs across all stores" />
+      <PageHeader title="Programs" description="Rewards programs across all stores" />
 
       {loading ? (
         <div className="flex justify-center py-16"><Spinner size="lg" /></div>
