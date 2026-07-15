@@ -60,7 +60,7 @@ export default function Landing() {
                 href="/register"
                 className="group inline-flex items-center justify-center gap-2 px-8 h-12 text-base font-bold text-violet-900 bg-white hover:bg-violet-50 rounded-full transition-all duration-200 shadow-xl min-w-[190px]"
               >
-                Start Free Trial
+                Get Started
                 <ArrowRight size={16} strokeWidth={2} className="transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true" />
               </Link>
               <Link
@@ -68,7 +68,7 @@ export default function Landing() {
                 className="group inline-flex items-center justify-center gap-2 text-base font-medium text-violet-200 hover:text-white transition-colors duration-200"
               >
                 <Sparkles size={14} aria-hidden="true" />
-                Try the Sommelier now
+                See how it works
                 <ChevronRight size={16} strokeWidth={2} className="transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true" />
               </Link>
             </div>
@@ -83,6 +83,7 @@ export default function Landing() {
         <div className="h-16 sm:h-24 md:h-32" aria-hidden="true" />
       </section>
 
+      {/* Temporary: landing chatbot for local testing — remove before production */}
       <Suspense fallback={null}>
         <LandingChatWidget />
       </Suspense>
@@ -96,7 +97,6 @@ export default function Landing() {
       <PricingSection />
 
       <div className="gradient-mesh">
-        {/* Footer */}
         <AnimateIn as="footer" variant="fade-in" className="border-t border-line bg-surface">
           <div className="container-app max-w-7xl py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
             <Logo size={28} showText />

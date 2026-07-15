@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import DashboardLayout from '@/components/DashboardLayout';
 import PageHeader from '@/components/ui/PageHeader';
 import { Card, CardTitle } from '@/components/ui/Card';
@@ -14,14 +15,26 @@ import { useAuth } from '@/context/AuthContext';
 import { storeToForm, CANADIAN_PROVINCES, COUNTRY_OPTIONS } from '@/lib/store-utils';
 import { ApiError, fieldErrorsToMap } from '@/lib/api';
 import { getBillingInfo, createCheckoutSession, createBillingPortal } from '@/lib/billing-api';
+import { getSubscriptionBadgeVariant, getSubscriptionStatusLabel } from '@/lib/subscription';
 
 export default function Settings() {
   const { toast } = useToast();
-  const { user, store, updateStore } = useAuth();
-  const [tab, setTab] = useState('profile');
+  const searchParams = useSearchParams();
+  const { user, store, updateStore, updateProfile } = useAuth();
+  const initialTab = searchParams.get('tab') === 'billing' ? 'billing' : 'profile';
+  const [tab, setTab] = useState(initialTab);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [profile, setProfile] = useState({ name: '', email: '', phone: '', address: '', country: 'CA', province: '' });
+  const [profile, setProfile] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    city: '',
+    websiteUrl: '',
+    country: 'CA',
+    province: '',
+  });
   const [logoFile, setLogoFile] = useState(null);
   const [billingInfo, setBillingInfo] = useState(null);
   const [billingLoading, setBillingLoading] = useState(false);
@@ -31,8 +44,10 @@ export default function Settings() {
       setProfile({
         name: store.name || '',
         email: user.email || '',
-        phone: '',
+        phone: user.phone || '',
         address: store.address || '',
+        city: store.city || '',
+        websiteUrl: store.websiteUrl || store.productPageUrl || '',
         country: store.country || 'CA',
         province: store.province || '',
       });
@@ -72,19 +87,25 @@ export default function Settings() {
   const saveProfile = async () => {
     setSaving(true);
     try {
-      await updateStore({
-        name: profile.name,
-        address: profile.address,
-        country: profile.country,
-        province: profile.province,
-      }, logoFile);
+      await Promise.all([
+        updateStore({
+          name: profile.name,
+          address: profile.address,
+          city: profile.city,
+          websiteUrl: profile.websiteUrl,
+          productPageUrl: profile.websiteUrl,
+          country: profile.country,
+          province: profile.province,
+        }, logoFile),
+        updateProfile({ phone: profile.phone }),
+      ]);
       setLogoFile(null);
       setSaved(true);
       toast('Settings saved successfully', 'success');
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
       const message = err instanceof ApiError
-        ? fieldErrorsToMap(err.errors).name || err.message
+        ? fieldErrorsToMap(err.errors).name || fieldErrorsToMap(err.errors).phone || err.message
         : 'Failed to save settings';
       toast(message, 'error');
     } finally {
@@ -159,13 +180,26 @@ export default function Settings() {
               <Input id="email" type="email" value={profile.email} readOnly className="bg-canvas" />
             </FormField>
 
-            <FormField label="Phone" htmlFor="phone">
+            <FormField label="Phone" htmlFor="phone" hint="Business contact phone">
               <Input
                 id="phone"
                 type="tel"
                 value={profile.phone}
                 onChange={(e) => setProfile((p) => ({ ...p, phone: e.target.value }))}
-                placeholder="Not yet synced to server"
+                placeholder="+1 604 555 0100"
+              />
+            </FormField>
+
+            <FormField
+              label="Website URL"
+              htmlFor="websiteUrl"
+              hint="Embed script is authorized for this domain only"
+            >
+              <Input
+                id="websiteUrl"
+                value={profile.websiteUrl}
+                onChange={(e) => setProfile((p) => ({ ...p, websiteUrl: e.target.value }))}
+                placeholder="https://yourstore.com"
               />
             </FormField>
 
@@ -174,7 +208,16 @@ export default function Settings() {
                 id="address"
                 value={profile.address}
                 onChange={(e) => setProfile((p) => ({ ...p, address: e.target.value }))}
-                placeholder="1234 Main St, Vancouver, BC"
+                placeholder="1234 Main St"
+              />
+            </FormField>
+
+            <FormField label="City" htmlFor="city">
+              <Input
+                id="city"
+                value={profile.city}
+                onChange={(e) => setProfile((p) => ({ ...p, city: e.target.value }))}
+                placeholder="Vancouver"
               />
             </FormField>
 
@@ -191,8 +234,8 @@ export default function Settings() {
               </select>
             </FormField>
 
-            {profile.country === 'CA' && (
-              <FormField label="Province / Territory" htmlFor="province" hint="Used to determine the legal purchasing age for your AI assistant">
+            {profile.country === 'CA' ? (
+              <FormField label="Province / Region" htmlFor="province" hint="Used to determine the legal purchasing age for your AI assistant">
                 <select
                   id="province"
                   value={profile.province}
@@ -204,6 +247,15 @@ export default function Settings() {
                     <option key={code} value={code}>{label}</option>
                   ))}
                 </select>
+              </FormField>
+            ) : (
+              <FormField label="State / Region" htmlFor="province">
+                <Input
+                  id="province"
+                  value={profile.province}
+                  onChange={(e) => setProfile((p) => ({ ...p, province: e.target.value }))}
+                  placeholder="Optional"
+                />
               </FormField>
             )}
 
@@ -232,17 +284,31 @@ export default function Settings() {
                     <p className="text-body text-sm">${billingInfo?.monthlyPrice ?? 99} / month</p>
                   </div>
                 </div>
-                <Badge variant="success">{store?.subscriptionStatus || 'trial'}</Badge>
+                <Badge variant={getSubscriptionBadgeVariant(store?.subscriptionStatus)}>
+                  {getSubscriptionStatusLabel(store?.subscriptionStatus)}
+                </Badge>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
                 {[
                   { label: 'Billing provider', value: billingInfo?.configured ? 'Stripe' : 'Not configured' },
-                  { label: 'Status', value: store?.subscriptionStatus || 'trial' },
+                  { label: 'Status', value: getSubscriptionStatusLabel(store?.subscriptionStatus) },
+                  {
+                    label: 'Renewal date',
+                    value: billingInfo?.nextBillingDate || store?.nextBillingDate
+                      ? new Date(billingInfo?.nextBillingDate || store.nextBillingDate).toLocaleDateString()
+                      : '—',
+                  },
+                  {
+                    label: 'Subscription end',
+                    value: billingInfo?.subscriptionEndDate || store?.subscriptionEndDate
+                      ? new Date(billingInfo?.subscriptionEndDate || store.subscriptionEndDate).toLocaleDateString()
+                      : '—',
+                  },
                 ].map(({ label, value }) => (
                   <div key={label} className="px-4 py-3.5 rounded-xl bg-canvas border border-line-subtle">
                     <p className="text-muted text-xs mb-1">{label}</p>
-                    <p className="text-ink text-sm font-semibold capitalize">{value}</p>
+                    <p className="text-ink text-sm font-semibold">{value}</p>
                   </div>
                 ))}
               </div>

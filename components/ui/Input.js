@@ -1,10 +1,11 @@
 'use client';
 
-export function Input({ className = '', error = false, ...props }) {
+export function Input({ className = '', error = false, hasIcon = false, ...props }) {
   return (
     <input
       className={[
-        'w-full h-11 px-3.5 text-sm text-ink bg-surface',
+        'w-full h-11 text-sm text-ink bg-surface',
+        hasIcon ? 'pl-10 pr-3.5' : 'px-3.5',
         'border rounded-xl transition-all duration-[var(--duration-fast)]',
         'placeholder:text-muted',
         'focus:outline-none focus:ring-[3px]',

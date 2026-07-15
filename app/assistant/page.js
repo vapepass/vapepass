@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Bot, Copy, CheckCircle, RefreshCw, Link2, Package, AlertTriangle, Code2,
+  Bot, Copy, CheckCircle, RefreshCw, Link2, Package, AlertTriangle, Code2, Rocket,
 } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import PageHeader from '@/components/ui/PageHeader';
@@ -19,7 +19,12 @@ import {
   syncInventory,
   getInventory,
   setPriorityPromotion,
+  goLive,
 } from '@/lib/assistant-api';
+
+/** Long scrapes (large catalogs + taxonomy) often exceed 30s */
+const POLL_INTERVAL_MS = 3000;
+const POLL_MAX_MS = 15 * 60 * 1000;
 
 function statusVariant(status) {
   switch (status) {
@@ -46,6 +51,14 @@ function formatDate(value) {
   }
 }
 
+function isTerminalSyncStatus(value) {
+  return value === 'success' || value === 'error';
+}
+
+function isActiveSyncStatus(value) {
+  return value === 'syncing' || value === 'pending';
+}
+
 export default function AssistantPage() {
   const { toast } = useToast();
   const [status, setStatus] = useState(null);
@@ -56,6 +69,19 @@ export default function AssistantPage() {
   const [syncing, setSyncing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [togglingId, setTogglingId] = useState(null);
+  const [goingLive, setGoingLive] = useState(false);
+
+  const pollGenerationRef = useRef(0);
+  const mountedRef = useRef(true);
+  const resumeStartedRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      pollGenerationRef.current += 1;
+    };
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -63,56 +89,122 @@ export default function AssistantPage() {
         getAssistantStatus(),
         getInventory(false).catch(() => []),
       ]);
+      if (!mountedRef.current) return assistantStatus;
       setStatus(assistantStatus);
       setProductPageUrlInput(assistantStatus.productPageUrl || '');
       setProducts(inventory);
+      return assistantStatus;
     } catch (err) {
-      toast(err instanceof ApiError ? err.message : 'Failed to load assistant status', 'error');
+      if (mountedRef.current) {
+        toast(err instanceof ApiError ? err.message : 'Failed to load assistant status', 'error');
+      }
+      return null;
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [toast]);
+
+  /**
+   * Poll until inventory sync reaches success/error (or timeout).
+   * Previous fixed attempt counts (~24–30s) stopped early while scrapes still ran,
+   * leaving inventorySyncStatus stuck on "syncing" until a manual refresh.
+   */
+  const pollUntilSyncComplete = useCallback(
+    async ({ showToast = true } = {}) => {
+      const generation = ++pollGenerationRef.current;
+      const startedAt = Date.now();
+      let lastStatus = null;
+
+      while (mountedRef.current && generation === pollGenerationRef.current) {
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+        if (!mountedRef.current || generation !== pollGenerationRef.current) return null;
+
+        try {
+          const [assistantStatus, inventory] = await Promise.all([
+            getAssistantStatus(),
+            getInventory(false).catch(() => []),
+          ]);
+          if (!mountedRef.current || generation !== pollGenerationRef.current) return null;
+
+          lastStatus = assistantStatus;
+          setStatus(assistantStatus);
+          setProducts(inventory);
+
+          if (isTerminalSyncStatus(assistantStatus.inventorySyncStatus)) {
+            if (showToast) {
+              if (assistantStatus.inventorySyncStatus === 'success') {
+                toast(
+                  `Inventory synced — ${assistantStatus.inventoryProductCount} products`,
+                  'success'
+                );
+              } else if (assistantStatus.inventorySyncError) {
+                toast(assistantStatus.inventorySyncError, 'error');
+              }
+            }
+            return assistantStatus;
+          }
+        } catch {
+          /* keep polling through transient network errors */
+        }
+
+        if (Date.now() - startedAt >= POLL_MAX_MS) {
+          if (showToast) {
+            toast(
+              'Scrape is taking longer than expected. Keep this tab open — status will update when finished, or refresh shortly.',
+              'warning'
+            );
+          }
+          await load();
+          return lastStatus;
+        }
+      }
+
+      return lastStatus;
+    },
+    [toast, load]
+  );
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const pollStatus = async (attempts = 8) => {
-    for (let i = 0; i < attempts; i += 1) {
-      await new Promise((r) => setTimeout(r, 3000));
+  // Resume polling if the page loads while a scrape is already in progress
+  useEffect(() => {
+    if (loading || resumeStartedRef.current) return;
+    if (!isActiveSyncStatus(status?.inventorySyncStatus)) return;
+    resumeStartedRef.current = true;
+    setSyncing(true);
+    (async () => {
       try {
-        const [assistantStatus, inventory] = await Promise.all([
-          getAssistantStatus(),
-          getInventory(false).catch(() => []),
-        ]);
-        setStatus(assistantStatus);
-        setProducts(inventory);
-        if (['success', 'error'].includes(assistantStatus.inventorySyncStatus)) {
-          if (assistantStatus.inventorySyncStatus === 'success') {
-            toast(`Inventory synced — ${assistantStatus.inventoryProductCount} products`, 'success');
-          } else if (assistantStatus.inventorySyncError) {
-            toast(assistantStatus.inventorySyncError, 'error');
-          }
-          return;
-        }
-      } catch {
-        /* keep polling */
+        await pollUntilSyncComplete({ showToast: true });
+      } finally {
+        if (mountedRef.current) setSyncing(false);
       }
-    }
-  };
+    })();
+  }, [loading, status?.inventorySyncStatus, pollUntilSyncComplete]);
 
   const saveUrl = async (e) => {
     e.preventDefault();
     setSaving(true);
+    setSyncing(true);
     try {
       const data = await setProductPageUrl(productPageUrl.trim(), true);
-      setStatus(data.status);
+      const nextStatus = data.status || null;
+      setStatus((prev) => ({
+        ...(prev || {}),
+        ...(nextStatus || {}),
+        inventorySyncStatus: 'syncing',
+      }));
       toast('Store URL saved. Scraping inventory…', 'success');
-      pollStatus(10);
+      await pollUntilSyncComplete({ showToast: true });
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Failed to save store URL', 'error');
+      await load();
     } finally {
-      setSaving(false);
+      if (mountedRef.current) {
+        setSaving(false);
+        setSyncing(false);
+      }
     }
   };
 
@@ -120,14 +212,24 @@ export default function AssistantPage() {
     setSyncing(true);
     try {
       const data = await syncInventory();
-      setStatus(data.status);
-      toast('Inventory sync started', 'success');
-      await pollStatus(10);
+      const nextStatus = data.status || data;
+      setStatus((prev) => ({
+        ...(prev || {}),
+        ...(nextStatus || {}),
+        inventorySyncStatus: 'syncing',
+      }));
+      toast(
+        data.isInitial
+          ? 'Initial inventory scrape started'
+          : `Inventory refresh started (${data.quota?.remaining ?? '?'} remaining this month)`,
+        'success'
+      );
+      await pollUntilSyncComplete({ showToast: true });
     } catch (err) {
-      toast(err instanceof ApiError ? err.message : 'Inventory sync failed', 'error');
+      toast(err instanceof ApiError ? err.message : 'Inventory refresh failed', 'error');
       await load();
     } finally {
-      setSyncing(false);
+      if (mountedRef.current) setSyncing(false);
     }
   };
 
@@ -135,7 +237,6 @@ export default function AssistantPage() {
     const next = !product.isPriorityPromotion;
     setTogglingId(product._id);
 
-    // Optimistic update — no page refresh
     setProducts((prev) =>
       prev.map((p) =>
         p._id === product._id ? { ...p, isPriorityPromotion: next } : p
@@ -148,7 +249,6 @@ export default function AssistantPage() {
         prev.map((p) => (p._id === updated._id ? { ...p, ...updated } : p))
       );
     } catch (err) {
-      // Revert on failure
       setProducts((prev) =>
         prev.map((p) =>
           p._id === product._id ? { ...p, isPriorityPromotion: !next } : p
@@ -172,6 +272,19 @@ export default function AssistantPage() {
     }
   };
 
+  const finishSetup = async () => {
+    setGoingLive(true);
+    try {
+      const nextStatus = await goLive();
+      setStatus(nextStatus);
+      toast('You are live — chatbot is now active on your authorized website', 'success');
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Unable to go live', 'error');
+    } finally {
+      setGoingLive(false);
+    }
+  };
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -180,7 +293,15 @@ export default function AssistantPage() {
     );
   }
 
-  const isSyncing = syncing || saving || ['syncing', 'pending'].includes(status?.inventorySyncStatus);
+  const isSyncing = syncing || saving || isActiveSyncStatus(status?.inventorySyncStatus);
+  const syncBadgeLabel =
+    status?.inventorySyncStatus === 'success'
+      ? 'Completed'
+      : status?.inventorySyncStatus === 'error'
+        ? 'Failed'
+        : isActiveSyncStatus(status?.inventorySyncStatus)
+          ? 'Scraping…'
+          : status?.inventorySyncStatus || 'idle';
 
   return (
     <DashboardLayout>
@@ -222,22 +343,50 @@ export default function AssistantPage() {
                 />
               </FormField>
 
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-3 items-center">
                 <Button type="submit" disabled={saving || !productPageUrl.trim() || isSyncing}>
-                  {saving || status?.inventorySyncStatus === 'syncing'
+                  {isSyncing
                     ? 'Scraping…'
-                    : 'Save & Scrape Inventory'}
+                    : status?.inventorySyncStatus === 'success'
+                      ? 'Save & Re-scrape'
+                      : 'Save & Scrape Inventory'}
                 </Button>
                 <Button
                   type="button"
                   variant="secondary"
                   onClick={runSync}
-                  disabled={syncing || !status?.productPageUrl || isSyncing}
+                  disabled={
+                    !status?.productPageUrl ||
+                    isSyncing ||
+                    (Boolean(status?.inventoryInitialSyncedAt) &&
+                      (status?.inventoryRefresh?.remaining ?? 1) <= 0)
+                  }
                 >
                   <RefreshCw size={15} className={isSyncing ? 'animate-spin' : ''} />
-                  {syncing ? 'Syncing…' : 'Sync Now'}
+                  {isSyncing ? 'Refreshing…' : 'Refresh Inventory'}
                 </Button>
+                {status?.inventoryRefresh?.label && (
+                  <p className="text-sm text-muted w-full sm:w-auto">
+                    {status.inventoryRefresh.label}
+                    {(status?.inventoryRefresh?.remaining ?? 1) <= 0 &&
+                    status?.inventoryInitialSyncedAt
+                      ? ' — limit reached for this month'
+                      : ''}
+                  </p>
+                )}
               </div>
+
+              {status?.recommendationTaxonomyStatus && (
+                <p className="text-xs text-muted">
+                  AI recommendation map:{' '}
+                  <span className="font-medium text-ink">
+                    {status.recommendationTaxonomyStatus}
+                  </span>
+                  {status.recommendationTaxonomyBuiltAt
+                    ? ` · built ${formatDate(status.recommendationTaxonomyBuiltAt)}`
+                    : ''}
+                </p>
+              )}
 
               {status?.inventorySyncError && (
                 <p className="text-sm text-danger-600 bg-danger-50 border border-red-200 rounded-xl px-4 py-3">
@@ -264,10 +413,50 @@ export default function AssistantPage() {
               {status?.embedCode || 'Save a store URL to generate your embed code.'}
             </pre>
 
+            <p className="text-xs text-muted">
+              Paste this script before the closing {'</body>'} tag of your website.
+            </p>
+
             <Button variant="secondary" onClick={copyEmbed} disabled={!status?.embedCode}>
               {copied ? <CheckCircle size={15} /> : <Copy size={15} />}
               {copied ? 'Copied' : 'Copy embed code'}
             </Button>
+          </Card>
+
+          <Card className="space-y-4 border-brand-200 ring-1 ring-brand-100">
+            <div className="flex items-start gap-3">
+              <div className="w-11 h-11 rounded-xl gradient-brand flex items-center justify-center flex-shrink-0">
+                <Rocket size={20} className="text-white" />
+              </div>
+              <div>
+                <CardTitle>Finish Setup / Go Live</CardTitle>
+                <CardDescription className="mt-1">
+                  Push selected products, then click Finish Setup / Go Live to activate the chatbot
+                  on your authorized website.
+                </CardDescription>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                onClick={finishSetup}
+                disabled={goingLive || status?.isLive || !status?.canGoLive || isSyncing}
+              >
+                <Rocket size={15} />
+                {goingLive
+                  ? 'Activating…'
+                  : status?.isLive
+                    ? 'Live'
+                    : 'Finish Setup / Go Live'}
+              </Button>
+              {!status?.canGoLive && !status?.isLive && (
+                <p className="text-sm text-muted self-center">
+                  Sync recommendable products before going live.
+                </p>
+              )}
+              {status?.isLive && (
+                <Badge variant="success">Chatbot active</Badge>
+              )}
+            </div>
           </Card>
 
           <Card>
@@ -277,18 +466,20 @@ export default function AssistantPage() {
                 <div>
                   <CardTitle>Store inventory</CardTitle>
                   <CardDescription className="mt-0.5">
-                    Products scraped into MongoDB for this store only
+                    View products, push selected ones, then finish setup
                   </CardDescription>
                 </div>
               </div>
               <Badge variant={statusVariant(status?.inventorySyncStatus)}>
-                {status?.inventorySyncStatus || 'idle'}
+                {syncBadgeLabel}
               </Badge>
             </div>
 
             {products.length === 0 ? (
               <p className="text-sm text-body">
-                No products yet. Enter your store website URL and run a scrape.
+                {isSyncing
+                  ? 'Scraping in progress — products will appear here when finished.'
+                  : 'No products yet. Enter your store website URL and run a scrape.'}
               </p>
             ) : (
               <div className="overflow-x-auto -mx-1">
@@ -296,6 +487,7 @@ export default function AssistantPage() {
                   <thead>
                     <tr className="text-left text-muted border-b border-line-subtle">
                       <th className="py-2 pr-3 font-medium">Product name</th>
+                      <th className="py-2 pr-3 font-medium">Product page</th>
                       <th className="py-2 pr-3 font-medium">Status</th>
                       <th className="py-2 pr-3 font-medium">Last updated</th>
                       <th className="py-2 font-medium min-w-[180px]">Push to Customers This Month</th>
@@ -312,6 +504,25 @@ export default function AssistantPage() {
                             <div>{p.name}</div>
                             {p.brand && (
                               <div className="text-xs text-muted font-normal mt-0.5">{p.brand}</div>
+                            )}
+                            {p.variantName && (
+                              <div className="text-xs text-muted font-normal mt-0.5">
+                                Variant: {p.variantName}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3 pr-3">
+                            {p.productUrl ? (
+                              <a
+                                href={p.productUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-brand-600 hover:text-brand-700 text-xs font-medium underline-offset-2 hover:underline break-all"
+                              >
+                                View page
+                              </a>
+                            ) : (
+                              <span className="text-xs text-muted">—</span>
                             )}
                           </td>
                           <td className="py-3 pr-3">

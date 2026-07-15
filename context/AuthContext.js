@@ -59,13 +59,14 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (email, password) => {
     const data = await authApi.loginUser(email, password);
     applyAuth(data);
+    let storeData = null;
     if (data.user?.role !== 'admin') {
-      const storeData = await storeApi.getStore();
+      storeData = await storeApi.getStore();
       setStore(storeData);
     } else {
       setStore(null);
     }
-    return data;
+    return { ...data, store: storeData };
   }, [applyAuth]);
 
   const register = useCallback(async (payload) => {
@@ -101,6 +102,12 @@ export function AuthProvider({ children }) {
     return updated;
   }, []);
 
+  const updateProfile = useCallback(async (payload) => {
+    const updated = await authApi.updateProfile(payload);
+    setUser(updated);
+    return updated;
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
@@ -112,9 +119,10 @@ export function AuthProvider({ children }) {
       logout,
       refreshStore,
       updateStore,
+      updateProfile,
       reloadSession: loadSession,
     }),
-    [user, store, loading, login, register, logout, refreshStore, updateStore, loadSession]
+    [user, store, loading, login, register, logout, refreshStore, updateStore, updateProfile, loadSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

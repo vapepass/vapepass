@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Sparkles, X, Send, AlertTriangle, Minimize2, ShoppingCart } from 'lucide-react';
+import { Sparkles, X, Send, AlertTriangle, Minimize2, RefreshCw } from 'lucide-react';
 import {
   getAssistantWidgetConfig,
   startAssistantSession,
@@ -10,22 +10,12 @@ import {
 } from '@/lib/assistant-public-api';
 import {
   FLOW_STEPS,
-  FLAVOR_CATEGORIES,
-  SUBCATEGORIES,
-  ICE_OPTIONS,
-  INTENSITY_OPTIONS,
-  CATEGORY_PROMPT,
-  SUBCATEGORY_PROMPT,
-  ICE_PROMPT,
-  INTENSITY_PROMPT,
-  CART_PROMPT,
-  getFinalAgePrompt,
+  ANOTHER_REC_PROMPT,
   getAgeYesLabel,
-  getAppreciation,
-  buildRecommendationQuery,
   formatUserChoice,
+  detectsRecommendationRestart,
+  normalizeOptions,
 } from '@/lib/chat/conversation-flow';
-import { parseAssistantMessage } from '@/lib/chat/parse-assistant-message';
 import TypingIndicator from '@/components/chat/TypingIndicator';
 import ChatMessageList from '@/components/chat/ChatMessageList';
 import OptionChips from '@/components/chat/OptionChips';
@@ -49,6 +39,27 @@ function createWelcomeTimeline() {
   return [{ id: nextId(), kind: 'welcome', role: 'assistant' }];
 }
 
+function productFromApi(product) {
+  if (!product) return null;
+  const productUrl =
+    (typeof product.productUrl === 'string' && product.productUrl.trim()) ||
+    (typeof product.originalProductUrl === 'string' && product.originalProductUrl.trim()) ||
+    '';
+  return {
+    name: product.name,
+    brand: product.brand,
+    flavor: product.flavor,
+    description:
+      product.description ||
+      [product.brand, product.flavor, product.variantName, product.nicotineStrength, product.bottleSize]
+        .filter(Boolean)
+        .join(' · ') ||
+      null,
+    imageUrl: product.imageUrl,
+    productUrl,
+  };
+}
+
 export default function LandingChatWidget() {
   const searchParams = useSearchParams();
   const storeId = resolveStoreId(searchParams);
@@ -66,9 +77,8 @@ export default function LandingChatWidget() {
 
   const [flowStep, setFlowStep] = useState(FLOW_STEPS.AGE_VERIFY);
   const [timeline, setTimeline] = useState(createWelcomeTimeline);
-  const [preferences, setPreferences] = useState({});
+  const [currentOptions, setCurrentOptions] = useState([]);
   const [recommendedProduct, setRecommendedProduct] = useState(null);
-  const [cartAdded, setCartAdded] = useState(false);
 
   const messagesEndRef = useRef(null);
   const bootstrappedRef = useRef(false);
@@ -85,12 +95,12 @@ export default function LandingChatWidget() {
     try {
       sessionStorage.setItem(
         guidedKey,
-        JSON.stringify({ step: flowStep, preferences, timeline, recommendedProduct })
+        JSON.stringify({ step: flowStep, timeline, recommendedProduct, currentOptions })
       );
     } catch {
       /* ignore */
     }
-  }, [guidedKey, flowStep, preferences, timeline, recommendedProduct]);
+  }, [guidedKey, flowStep, timeline, recommendedProduct, currentOptions]);
 
   const applySession = useCallback(
     (session) => {
@@ -107,22 +117,69 @@ export default function LandingChatWidget() {
 
       if (session.locked) {
         setFlowStep(FLOW_STEPS.LOCKED);
-        const lockMsg =
-          [...(session.messages || [])].reverse().find((m) => m.role === 'assistant')?.content;
-        if (lockMsg) {
-          setTimeline((prev) => [
-            ...prev.filter((t) => t.kind !== 'welcome'),
-            { id: nextId(), kind: 'text', role: 'assistant', content: lockMsg, variant: 'locked' },
-          ]);
-        }
+        setCurrentOptions([]);
       }
     },
     [storageKey]
   );
 
+  const applyGuidedReply = useCallback(
+    (session, { appendAssistantText = true } = {}) => {
+      const options = normalizeOptions(session.options);
+      const replyType = session.replyType || 'text';
+      const reply = session.reply || '';
+
+      if (replyType === 'options' && options.length) {
+        if (appendAssistantText && reply) {
+          appendTimeline({ id: nextId(), kind: 'text', role: 'assistant', content: reply });
+        }
+        setCurrentOptions(options);
+        setFlowStep(FLOW_STEPS.OPTIONS);
+        setRecommendedProduct(null);
+        return;
+      }
+
+      if (replyType === 'recommendation' || (Array.isArray(session.products) && session.products.length)) {
+        const apiProduct = session.products?.[0];
+        const product = productFromApi(apiProduct);
+        if (product) {
+          setRecommendedProduct(product);
+          appendTimeline({
+            id: nextId(),
+            kind: 'product',
+            role: 'assistant',
+            intro: reply,
+            product,
+            disclaimer: null,
+          });
+          appendTimeline({
+            id: nextId(),
+            kind: 'text',
+            role: 'assistant',
+            content: ANOTHER_REC_PROMPT,
+          });
+        } else if (reply) {
+          appendTimeline({ id: nextId(), kind: 'text', role: 'assistant', content: reply });
+        }
+        setCurrentOptions(normalizeOptions(session.options));
+        setFlowStep(FLOW_STEPS.RECOMMENDATION);
+        return;
+      }
+
+      if (appendAssistantText && reply) {
+        appendTimeline({ id: nextId(), kind: 'text', role: 'assistant', content: reply });
+      }
+      setCurrentOptions(normalizeOptions(session.options));
+      setFlowStep(session.locked ? FLOW_STEPS.LOCKED : FLOW_STEPS.FREE_CHAT);
+    },
+    [appendTimeline]
+  );
+
   const bootstrap = useCallback(async () => {
     if (!storeId) {
-      setError('Set NEXT_PUBLIC_DEMO_STORE_ID in frontend/.env.local or add ?storeId=YOUR_STORE_ID to the URL.');
+      setError(
+        'Set NEXT_PUBLIC_DEMO_STORE_ID in frontend/.env.local or add ?storeId=YOUR_STORE_ID to the URL.'
+      );
       return;
     }
 
@@ -160,34 +217,16 @@ export default function LandingChatWidget() {
             const parsed = JSON.parse(saved);
             if (parsed.timeline?.length) {
               setTimeline(parsed.timeline);
-              setPreferences(parsed.preferences || {});
               setRecommendedProduct(parsed.recommendedProduct || null);
+              setCurrentOptions(parsed.currentOptions || []);
               if (!session.locked) {
-                setFlowStep(parsed.step || FLOW_STEPS.CATEGORY);
+                setFlowStep(parsed.step || FLOW_STEPS.OPTIONS);
               }
             }
           }
         } catch {
           /* ignore */
         }
-      }
-
-      if (session.ageVerified && !session.locked) {
-        setFlowStep((step) => {
-          if (step === FLOW_STEPS.AGE_VERIFY) {
-            setTimeline((prev) => {
-              if (prev.some((t) => t.kind === 'welcome') && !prev.some((t) => t.content === CATEGORY_PROMPT)) {
-                return [
-                  ...prev,
-                  { id: nextId(), kind: 'text', role: 'assistant', content: CATEGORY_PROMPT },
-                ];
-              }
-              return prev;
-            });
-            return FLOW_STEPS.CATEGORY;
-          }
-          return step;
-        });
       }
 
       bootstrappedRef.current = true;
@@ -206,45 +245,10 @@ export default function LandingChatWidget() {
 
   useEffect(() => {
     if (open && !minimized) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [timeline, open, minimized, sending, flowStep]);
-
-  const addAssistantReply = useCallback(
-    (session) => {
-      const lastAssistant = [...(session.messages || [])]
-        .reverse()
-        .find((m) => m.role === 'assistant');
-      if (!lastAssistant?.content) return;
-
-      const parsed = parseAssistantMessage(lastAssistant.content);
-      if (parsed.type === 'recommendation' && parsed.products.length) {
-        const primary = parsed.products[0];
-        setRecommendedProduct(primary);
-        appendTimeline([
-          {
-            id: nextId(),
-            kind: 'product',
-            role: 'assistant',
-            intro: parsed.intro,
-            product: primary,
-            disclaimer: parsed.disclaimer,
-          },
-          { id: nextId(), kind: 'text', role: 'assistant', content: CART_PROMPT },
-        ]);
-        setFlowStep(FLOW_STEPS.CART_PROMPT);
-      } else {
-        appendTimeline({
-          id: nextId(),
-          kind: 'text',
-          role: 'assistant',
-          content: lastAssistant.content,
-        });
-      }
-    },
-    [appendTimeline]
-  );
+  }, [timeline, open, minimized, sending, flowStep, currentOptions]);
 
   const submitMessage = useCallback(
-    async (text, { silent = false, skipAssistantReply = false } = {}) => {
+    async (text, { silent = false } = {}) => {
       const trimmed = text.trim();
       if (!trimmed || locked || sending || !storeId || !sessionKey) return null;
 
@@ -263,8 +267,22 @@ export default function LandingChatWidget() {
       try {
         const session = await sendAssistantMessage(storeId, sessionKey, trimmed);
         applySession(session);
-        if (!skipAssistantReply && !session.locked) {
-          addAssistantReply(session);
+        if (!session.locked) {
+          applyGuidedReply(session);
+        } else {
+          const lockContent =
+            session.reply ||
+            session.messages?.[session.messages.length - 1]?.content ||
+            'This conversation has ended.';
+          appendTimeline({
+            id: nextId(),
+            kind: 'text',
+            role: 'assistant',
+            content: lockContent,
+            variant: 'locked',
+          });
+          setFlowStep(FLOW_STEPS.LOCKED);
+          setCurrentOptions([]);
         }
         return session;
       } catch (err) {
@@ -279,7 +297,7 @@ export default function LandingChatWidget() {
         setSending(false);
       }
     },
-    [locked, sending, storeId, sessionKey, applySession, appendTimeline, addAssistantReply]
+    [locked, sending, storeId, sessionKey, applySession, appendTimeline, applyGuidedReply]
   );
 
   const legalAge = config?.legalAge ?? 19;
@@ -297,13 +315,7 @@ export default function LandingChatWidget() {
       const session = await sendAssistantMessage(storeId, sessionKey, ageYesLabel);
       applySession(session);
       if (!session.locked) {
-        setFlowStep(FLOW_STEPS.CATEGORY);
-        appendTimeline({
-          id: nextId(),
-          kind: 'text',
-          role: 'assistant',
-          content: CATEGORY_PROMPT,
-        });
+        applyGuidedReply(session);
       }
     } catch (err) {
       appendTimeline({
@@ -331,6 +343,7 @@ export default function LandingChatWidget() {
       if (session.locked) {
         setFlowStep(FLOW_STEPS.LOCKED);
         const lockContent =
+          session.reply ||
           session.messages?.[session.messages.length - 1]?.content ||
           'This conversation has ended.';
         appendTimeline({
@@ -354,164 +367,63 @@ export default function LandingChatWidget() {
     }
   };
 
-  const handleCategorySelect = (category) => {
-    const prefs = { ...preferences, category };
-    setPreferences(prefs);
-    const appreciation = getAppreciation(category.id);
+  const handleOptionSelect = async (option) => {
+    appendTimeline({
+      id: nextId(),
+      kind: 'text',
+      role: 'user',
+      content: formatUserChoice(option),
+    });
+    setCurrentOptions([]);
+    setFlowStep(FLOW_STEPS.FETCHING);
+    // Prefer structured option id so backend matching is reliable
+    await submitMessage(`::option::${option.id}`, { silent: true });
+  };
 
-    appendTimeline([
-      { id: nextId(), kind: 'text', role: 'user', content: formatUserChoice(category) },
-      {
+  const handleAnotherRecommendation = async () => {
+    setRecommendedProduct(null);
+    setCurrentOptions([]);
+    appendTimeline({
+      id: nextId(),
+      kind: 'text',
+      role: 'user',
+      content: 'I want another recommendation',
+    });
+    setSending(true);
+    try {
+      const session = await sendAssistantMessage(
+        storeId,
+        sessionKey,
+        'I want another recommendation'
+      );
+      applySession(session);
+      applyGuidedReply(session);
+    } catch (err) {
+      appendTimeline({
         id: nextId(),
         kind: 'text',
         role: 'assistant',
-        content: `${appreciation.headline}\n${appreciation.body}`,
-      },
-      { id: nextId(), kind: 'text', role: 'assistant', content: SUBCATEGORY_PROMPT },
-    ]);
-    setFlowStep(FLOW_STEPS.SUBCATEGORY);
-  };
-
-  const handleSubcategorySelect = (subcategory) => {
-    const prefs = { ...preferences, subcategory };
-    setPreferences(prefs);
-    appendTimeline([
-      { id: nextId(), kind: 'text', role: 'user', content: formatUserChoice(subcategory) },
-      { id: nextId(), kind: 'text', role: 'assistant', content: ICE_PROMPT },
-    ]);
-    setFlowStep(FLOW_STEPS.ICE);
-  };
-
-  const handleIceSelect = (ice) => {
-    const prefs = { ...preferences, ice };
-    setPreferences(prefs);
-    appendTimeline([
-      { id: nextId(), kind: 'text', role: 'user', content: formatUserChoice(ice) },
-      { id: nextId(), kind: 'text', role: 'assistant', content: INTENSITY_PROMPT },
-    ]);
-    setFlowStep(FLOW_STEPS.INTENSITY);
-  };
-
-  const handleIntensitySelect = async (intensity) => {
-    const prefs = { ...preferences, intensity };
-    setPreferences(prefs);
-    appendTimeline({ id: nextId(), kind: 'text', role: 'user', content: formatUserChoice(intensity) });
-    setFlowStep(FLOW_STEPS.FETCHING_REC);
-
-    const query = buildRecommendationQuery(prefs);
-    const session = await submitMessage(query, { silent: true, skipAssistantReply: true });
-
-    if (session && !session.locked) {
-      const lastAssistant = [...(session.messages || [])]
-        .reverse()
-        .find((m) => m.role === 'assistant');
-      const parsed = parseAssistantMessage(lastAssistant?.content || '');
-
-      if (parsed.type === 'recommendation' && parsed.products.length) {
-        const primary = parsed.products[0];
-        setRecommendedProduct(primary);
-        appendTimeline({
-          id: nextId(),
-          kind: 'product',
-          role: 'assistant',
-          intro: parsed.intro,
-          product: primary,
-          disclaimer: parsed.disclaimer,
-        });
-        appendTimeline({
-          id: nextId(),
-          kind: 'text',
-          role: 'assistant',
-          content: CART_PROMPT,
-        });
-        setFlowStep(FLOW_STEPS.CART_PROMPT);
-      } else {
-        appendTimeline({
-          id: nextId(),
-          kind: 'text',
-          role: 'assistant',
-          content: lastAssistant?.content || 'Let me know if you\'d like to explore other options.',
-        });
-        setFlowStep(FLOW_STEPS.FREE_CHAT);
-      }
+        content: err.message || 'Something went wrong. Please try again.',
+      });
+      setFlowStep(FLOW_STEPS.FREE_CHAT);
+    } finally {
+      setSending(false);
     }
   };
 
-  const handleCartYes = () => {
-    appendTimeline({ id: nextId(), kind: 'text', role: 'user', content: 'Yes, add to cart' });
-    appendTimeline({
-      id: nextId(),
-      kind: 'text',
-      role: 'assistant',
-      content: getFinalAgePrompt(legalAge),
-    });
-    setFlowStep(FLOW_STEPS.FINAL_AGE);
-  };
-
-  const handleCartNo = () => {
-    appendTimeline({ id: nextId(), kind: 'text', role: 'user', content: 'Not right now' });
-    appendTimeline({
-      id: nextId(),
-      kind: 'text',
-      role: 'assistant',
-      content: 'No problem! Feel free to explore other profiles or ask me anything else.',
-    });
-    setFlowStep(FLOW_STEPS.FREE_CHAT);
-  };
-
-  const handleFinalAgeYes = () => {
-    appendTimeline({ id: nextId(), kind: 'text', role: 'user', content: ageYesLabel });
-    appendTimeline({
-      id: nextId(),
-      kind: 'text',
-      role: 'assistant',
-      content: 'Perfect — you\'re all set to add this to your cart.',
-    });
-    setFlowStep(FLOW_STEPS.ADD_TO_CART);
-  };
-
-  const handleFinalAgeNo = () => {
-    appendTimeline({ id: nextId(), kind: 'text', role: 'user', content: 'No' });
-    setFlowStep(FLOW_STEPS.FREE_CHAT);
-    setTimeout(() => setOpen(false), 1200);
-  };
-
-  const handleAddToCart = () => {
-    setCartAdded(true);
-    appendTimeline({
-      id: nextId(),
-      kind: 'text',
-      role: 'assistant',
-      content: `🎉 ${recommendedProduct?.name || 'Product'} has been added to your cart!`,
-    });
-    setFlowStep(FLOW_STEPS.FREE_CHAT);
-  };
-
-  const handleSend = (e) => {
+  const handleSend = async (e) => {
     e.preventDefault();
-    submitMessage(input);
-  };
+    const text = input.trim();
+    if (!text) return;
 
-  const currentOptions = useMemo(() => {
-    switch (flowStep) {
-      case FLOW_STEPS.CATEGORY:
-        return FLAVOR_CATEGORIES;
-      case FLOW_STEPS.SUBCATEGORY:
-        return SUBCATEGORIES[preferences.category?.id] || [];
-      case FLOW_STEPS.ICE:
-        return ICE_OPTIONS;
-      case FLOW_STEPS.INTENSITY:
-        return INTENSITY_OPTIONS;
-      default:
-        return null;
+    if (detectsRecommendationRestart(text)) {
+      setInput('');
+      await handleAnotherRecommendation();
+      return;
     }
-  }, [flowStep, preferences.category?.id]);
 
-  const handleOptionSelect = (option) => {
-    if (flowStep === FLOW_STEPS.CATEGORY) handleCategorySelect(option);
-    else if (flowStep === FLOW_STEPS.SUBCATEGORY) handleSubcategorySelect(option);
-    else if (flowStep === FLOW_STEPS.ICE) handleIceSelect(option);
-    else if (flowStep === FLOW_STEPS.INTENSITY) handleIntensitySelect(option);
+    setCurrentOptions([]);
+    await submitMessage(text);
   };
 
   const healthWarning =
@@ -521,14 +433,21 @@ export default function LandingChatWidget() {
   const showAgeButtons =
     flowStep === FLOW_STEPS.AGE_VERIFY && !ageVerified && !locked && !loading && !error && sessionKey;
 
-  const showOptionChips = currentOptions?.length > 0 && !sending && !locked;
+  const showOptionChips =
+    flowStep === FLOW_STEPS.OPTIONS && currentOptions.length > 0 && !sending && !locked;
 
-  const showCartButtons = flowStep === FLOW_STEPS.CART_PROMPT && !sending;
-  const showFinalAgeButtons = flowStep === FLOW_STEPS.FINAL_AGE && !sending;
-  const showAddToCartButton = flowStep === FLOW_STEPS.ADD_TO_CART && !cartAdded;
+  const showAnotherRecButton =
+    (flowStep === FLOW_STEPS.RECOMMENDATION || currentOptions.some((o) => o.id === 'another')) &&
+    !sending &&
+    !locked &&
+    ageVerified &&
+    !showOptionChips;
 
   const showComposer =
-    (flowStep === FLOW_STEPS.FREE_CHAT || flowStep === FLOW_STEPS.LOCKED) &&
+    (flowStep === FLOW_STEPS.FREE_CHAT ||
+      flowStep === FLOW_STEPS.RECOMMENDATION ||
+      flowStep === FLOW_STEPS.LOCKED ||
+      flowStep === FLOW_STEPS.OPTIONS) &&
     (ageVerified || locked);
 
   const handleOpen = () => {
@@ -596,6 +515,13 @@ export default function LandingChatWidget() {
                   AI Flavor Sommelier
                 </p>
                 <p className="text-[12px] text-purple-200 mt-0.5 leading-tight">Powered by VapePass</p>
+                {(config?.regionLabel || config?.legalAge) && (
+                  <p className="text-[11px] text-purple-100/90 mt-0.5 leading-tight">
+                    {[config?.regionLabel, config?.legalAge ? `Minimum Age: ${config.legalAge}+` : null]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-0.5 flex-shrink-0">
@@ -680,65 +606,25 @@ export default function LandingChatWidget() {
                 options={currentOptions}
                 onSelect={handleOptionSelect}
                 disabled={sending}
-                columns={flowStep === FLOW_STEPS.CATEGORY ? 2 : 2}
+                columns={2}
               />
             </div>
           )}
 
-          {showCartButtons && (
-            <div className="px-4 pb-4 pt-1 flex gap-2.5 flex-shrink-0 animate-fade-in">
+          {showAnotherRecButton && (
+            <div className="px-4 pb-3 pt-1 flex-shrink-0 animate-fade-in">
               <button
                 type="button"
-                onClick={handleCartYes}
-                className="chat-widget-age-yes flex-1 h-11 text-[14px]"
+                onClick={handleAnotherRecommendation}
+                className="w-full h-11 rounded-full border border-[#e5e7eb] bg-[#f9fafb] text-[13px] font-semibold text-[#374151] flex items-center justify-center gap-2 hover:bg-[#f3f4f6]"
               >
-                Yes, add to cart
-              </button>
-              <button
-                type="button"
-                onClick={handleCartNo}
-                className="chat-widget-age-no flex-1 h-11 text-[14px]"
-              >
-                Not now
+                <RefreshCw size={15} />
+                Get Another Recommendation
               </button>
             </div>
           )}
 
-          {showFinalAgeButtons && (
-            <div className="px-4 pb-5 pt-2 flex-shrink-0 animate-fade-in bg-white">
-              <div className="chat-widget-age-actions">
-                <button
-                  type="button"
-                  onClick={handleFinalAgeYes}
-                  className="chat-widget-age-yes h-11"
-                >
-                  Yes, I&apos;m {legalAge}+
-                </button>
-                <button
-                  type="button"
-                  onClick={handleFinalAgeNo}
-                  className="chat-widget-age-no h-11"
-                >
-                  No
-                </button>
-              </div>
-            </div>
-          )}
-
-          {showAddToCartButton && (
-            <div className="px-4 pb-4 pt-1 flex-shrink-0 animate-fade-in">
-              <button
-                type="button"
-                onClick={handleAddToCart}
-                className="chat-widget-add-cart w-full h-12 flex items-center justify-center gap-2 text-[14px] font-semibold text-white"
-              >
-                <ShoppingCart size={18} />
-                Add to Cart
-              </button>
-            </div>
-          )}
-
-          {showComposer && (
+          {showComposer && !showAgeButtons && (
             <>
               <p className="px-4 py-2 text-[11px] text-[#9ca3af] border-t border-[#f3f4f6] bg-white flex-shrink-0">
                 {locked

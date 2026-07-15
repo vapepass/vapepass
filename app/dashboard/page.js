@@ -8,11 +8,15 @@ import { Card, CardTitle, CardDescription } from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import {
-  Bot, Package, Link2, Sparkles, Settings, CreditCard, ArrowRight, CheckCircle2, AlertCircle,
+  Bot, Package, Link2, Sparkles, Settings, CreditCard, ArrowRight, CheckCircle2, AlertCircle, Copy, Code2,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getAssistantStatus } from '@/lib/assistant-api';
 import { ApiError } from '@/lib/api';
+import {
+  getSubscriptionBadgeVariant,
+  getSubscriptionStatusLabel,
+} from '@/lib/subscription';
 
 function statusVariant(status) {
   switch (status) {
@@ -21,6 +25,11 @@ function statusVariant(status) {
       return 'success';
     case 'error':
     case 'inactive':
+    case 'past_due':
+      return 'warning';
+    case 'paused':
+    case 'expired':
+    case 'cancelled':
       return 'danger';
     case 'syncing':
     case 'pending':
@@ -67,6 +76,7 @@ export default function Dashboard() {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -84,10 +94,22 @@ export default function Dashboard() {
     load();
   }, [load]);
 
-  const planLabel = (store?.subscriptionStatus || 'trial').replace('_', ' ');
+  const planLabel = getSubscriptionStatusLabel(store?.subscriptionStatus);
   const syncLabel = status?.inventorySyncStatus || 'idle';
   const productCount = status?.inventoryProductCount ?? 0;
-  const assistantLive = Boolean(status?.assistantEnabled);
+  const assistantLive = Boolean(status?.assistantEnabled || status?.isLive);
+  const paymentFailed = store?.subscriptionStatus === 'past_due';
+
+  const copyEmbed = async () => {
+    if (!status?.embedCode) return;
+    try {
+      await navigator.clipboard.writeText(status.embedCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -99,6 +121,50 @@ export default function Dashboard() {
             : 'AI Flavor Sommelier overview for your store'
         }
       />
+
+      {paymentFailed && (
+        <Card className="mb-6 border-amber-200 bg-amber-50">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Badge variant={getSubscriptionBadgeVariant('past_due')}>Payment Failed</Badge>
+                <CardTitle className="!text-base">Subscription Paused soon if unpaid</CardTitle>
+              </div>
+              <CardDescription>
+                We couldn&apos;t process your payment. Stripe will retry automatically. Update your
+                payment method to keep the dashboard and chatbot active.
+              </CardDescription>
+            </div>
+            <Button as={Link} href="/settings?tab=billing" variant="secondary" size="sm">
+              <CreditCard size={14} /> Update billing
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      <Card className="mb-6 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="w-11 h-11 rounded-xl bg-brand-50 flex items-center justify-center flex-shrink-0">
+              <Code2 size={20} className="text-brand-600" aria-hidden="true" />
+            </div>
+            <div>
+              <CardTitle>Your Embed Script</CardTitle>
+              <CardDescription className="mt-1">
+                Paste this script before the closing {'</body>'} tag of your website.
+                It only works on your authorized domain
+                {status?.allowedHostname ? ` (${status.allowedHostname})` : ''}.
+              </CardDescription>
+            </div>
+          </div>
+          <Button variant="secondary" size="sm" onClick={copyEmbed} disabled={!status?.embedCode}>
+            <Copy size={14} /> {copied ? 'Copied' : 'Copy'}
+          </Button>
+        </div>
+        <pre className="rounded-xl bg-ink text-white text-xs sm:text-sm p-4 overflow-x-auto whitespace-pre-wrap break-all">
+          {loading ? 'Loading…' : status?.embedCode || 'Complete setup to generate your embed script.'}
+        </pre>
+      </Card>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <StatCard
@@ -121,9 +187,15 @@ export default function Dashboard() {
         />
         <StatCard
           icon={CreditCard}
-          label="Plan"
+          label="Subscription"
           value={planLabel}
-          color="#10b981"
+          color={
+            store?.subscriptionStatus === 'active'
+              ? '#10b981'
+              : store?.subscriptionStatus === 'past_due'
+                ? '#f59e0b'
+                : '#ef4444'
+          }
         />
       </div>
 
@@ -190,7 +262,11 @@ export default function Dashboard() {
             </div>
             <div className="rounded-xl bg-canvas border border-line-subtle px-4 py-3.5">
               <p className="text-[11px] text-muted uppercase tracking-wider mb-1">Plan</p>
-              <p className="text-sm font-semibold text-ink capitalize">{planLabel}</p>
+              <div className="flex items-center gap-2">
+                <Badge variant={getSubscriptionBadgeVariant(store?.subscriptionStatus)}>
+                  {planLabel}
+                </Badge>
+              </div>
             </div>
             <div className="rounded-xl bg-canvas border border-line-subtle px-4 py-3.5">
               <p className="text-[11px] text-muted uppercase tracking-wider mb-1">Products</p>

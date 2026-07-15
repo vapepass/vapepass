@@ -476,20 +476,23 @@ body {
     font-style: italic;
   }
 
-  .chat-widget-add-cart {
+  .chat-widget-add-cart,
+  .chat-widget-view-product {
     background: #8b5cf6;
     border-radius: 9999px;
     box-shadow: 0 4px 14px rgba(139, 92, 246, 0.35);
     transition: background 150ms ease, transform 150ms ease, box-shadow 150ms ease;
   }
 
-  .chat-widget-add-cart:hover {
+  .chat-widget-add-cart:hover,
+  .chat-widget-view-product:hover {
     background: #7c3aed;
     box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
     transform: translateY(-1px);
   }
 
-  .chat-widget-add-cart:active {
+  .chat-widget-add-cart:active,
+  .chat-widget-view-product:active {
     transform: translateY(0);
   }
 

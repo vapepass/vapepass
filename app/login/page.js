@@ -9,6 +9,7 @@ import GuestGuard from '@/components/GuestGuard';
 import { Input, FormField, InputGroup, InputIcon } from '@/components/ui/Input';
 import { useAuth } from '@/context/AuthContext';
 import { ApiError, fieldErrorsToMap } from '@/lib/api';
+import { canAccessDashboard } from '@/lib/subscription';
 
 export default function Login() {
   const router = useRouter();
@@ -42,7 +43,8 @@ export default function Login() {
         return;
       }
 
-      router.replace('/dashboard');
+      const status = data.store?.subscriptionStatus;
+      router.replace(canAccessDashboard(status) ? '/dashboard' : '/subscribe');
     } catch (err) {
       if (err instanceof ApiError) {
         const fieldErrors = fieldErrorsToMap(err.errors);

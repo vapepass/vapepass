@@ -7,6 +7,8 @@ import {
 import Logo from '@/components/Logo';
 import { useAuth } from '@/context/AuthContext';
 import { isSidebarRouteVisible } from '@/lib/nav-visibility';
+import { getSubscriptionBadgeVariant, getSubscriptionStatusLabel } from '@/lib/subscription';
+import Badge from '@/components/ui/Badge';
 
 /** Visible retailer nav — loyalty routes remain in app but are hidden via nav-visibility. */
 const nav = [
@@ -69,9 +71,10 @@ export default function Sidebar({ onClose }) {
           <Sparkles size={14} className="text-brand-600" aria-hidden="true" />
           <p className="text-xs font-semibold text-ink">VapePass Plan</p>
         </div>
-        <p className="text-xs text-body capitalize">
-          $99/mo · {store?.subscriptionStatus?.replace('_', ' ') || 'trial'}
-        </p>
+        <p className="text-xs text-body mb-2">$99/mo</p>
+        <Badge variant={getSubscriptionBadgeVariant(store?.subscriptionStatus)}>
+          {getSubscriptionStatusLabel(store?.subscriptionStatus)}
+        </Badge>
       </div>
     </aside>
   );
