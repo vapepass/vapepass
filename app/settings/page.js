@@ -16,6 +16,7 @@ import { storeToForm, CANADIAN_PROVINCES, COUNTRY_OPTIONS } from '@/lib/store-ut
 import { ApiError, fieldErrorsToMap } from '@/lib/api';
 import { getBillingInfo, createCheckoutSession, createBillingPortal } from '@/lib/billing-api';
 import { getSubscriptionBadgeVariant, getSubscriptionStatusLabel } from '@/lib/subscription';
+import AutoSubscriptionSettings from '@/components/settings/AutoSubscriptionSettings';
 
 export default function Settings() {
   const { toast } = useToast();
@@ -322,6 +323,23 @@ export default function Settings() {
                 </Button>
               </div>
             </Card>
+
+            <AutoSubscriptionSettings
+              billingInfo={billingInfo}
+              onUpdated={(result) => {
+                setBillingInfo((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        autoRenew: result.autoRenew !== false,
+                        autoRenewUpdatedAt: result.autoRenewUpdatedAt || prev.autoRenewUpdatedAt,
+                        nextBillingDate: result.nextBillingDate || prev.nextBillingDate,
+                        subscriptionEndDate: result.subscriptionEndDate || prev.subscriptionEndDate,
+                      }
+                    : prev
+                );
+              }}
+            />
 
             <Card>
               <CardTitle>Billing History</CardTitle>

@@ -1,5 +1,10 @@
 import { ExternalLink } from 'lucide-react';
 import { NICOTINE_DISCLAIMER } from '@/lib/chat/conversation-flow';
+import {
+  resolveRecommendationDisplay,
+  summarizeProductBlurb,
+  summarizeRecommendationIntro,
+} from '@/lib/chat/product-display';
 
 export default function ProductRecommendationCard({ product, intro, disclaimer }) {
   const productUrl =
@@ -7,11 +12,15 @@ export default function ProductRecommendationCard({ product, intro, disclaimer }
     (typeof product?.originalProductUrl === 'string' && product.originalProductUrl.trim()) ||
     '';
 
+  const { title, variant } = resolveRecommendationDisplay(product);
+  const blurb = summarizeProductBlurb(product.description);
+  const introText = summarizeRecommendationIntro(intro);
+
   return (
     <div className="flex justify-start animate-fade-in">
       <div className="chat-widget-product-card w-full max-w-[92%]">
-        {intro && (
-          <p className="text-[13px] text-[#374151] leading-relaxed mb-3">{intro}</p>
+        {introText && (
+          <p className="text-[13px] text-[#374151] leading-relaxed mb-3">{introText}</p>
         )}
         <div className="rounded-2xl border border-[#e5e7eb] bg-gradient-to-br from-white to-[#faf9ff] p-4 shadow-sm">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-[#7c3aed] mb-2">
@@ -31,15 +40,21 @@ export default function ProductRecommendationCard({ product, intro, disclaimer }
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <h4 className="text-[15px] font-semibold text-[#111827] tracking-[-0.01em]">
-                {product.name}
+              <h4 className="text-[15px] font-semibold text-[#111827] tracking-[-0.01em] leading-snug">
+                {title}
               </h4>
-              {product.brand && (
-                <p className="text-[12px] text-[#6b7280] mt-0.5">{product.brand}</p>
+              {variant && (
+                <p className="chat-widget-variant mt-1.5">
+                  <span className="chat-widget-variant-label">Variant</span>
+                  <span className="chat-widget-variant-name">{variant}</span>
+                </p>
               )}
-              {product.description && (
-                <p className="text-[13px] text-[#4b5563] leading-relaxed mt-1.5 line-clamp-4">
-                  {product.description}
+              {product.brand && (
+                <p className="text-[12px] text-[#6b7280] mt-1">{product.brand}</p>
+              )}
+              {blurb && (
+                <p className="text-[13px] text-[#4b5563] leading-relaxed mt-1.5">
+                  {blurb}
                 </p>
               )}
             </div>

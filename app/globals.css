@@ -476,6 +476,28 @@ body {
     font-style: italic;
   }
 
+  .chat-widget-variant {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 8px;
+  }
+
+  .chat-widget-variant-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #7c3aed;
+  }
+
+  .chat-widget-variant-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #5b21b6;
+    line-height: 1.35;
+  }
+
   .chat-widget-add-cart,
   .chat-widget-view-product {
     background: #8b5cf6;

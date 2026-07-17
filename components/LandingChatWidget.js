@@ -48,13 +48,9 @@ function productFromApi(product) {
   return {
     name: product.name,
     brand: product.brand,
-    flavor: product.flavor,
-    description:
-      product.description ||
-      [product.brand, product.flavor, product.variantName, product.nicotineStrength, product.bottleSize]
-        .filter(Boolean)
-        .join(' · ') ||
-      null,
+    flavor: product.flavor || null,
+    variantName: product.variantName || null,
+    description: product.description || null,
     imageUrl: product.imageUrl,
     productUrl,
   };
