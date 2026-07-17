@@ -176,6 +176,7 @@ export default function LandingChatWidget() {
       setError(
         'Set NEXT_PUBLIC_DEMO_STORE_ID in frontend/.env.local or add ?storeId=YOUR_STORE_ID to the URL.'
       );
+      bootstrappedRef.current = true;
       return;
     }
 
@@ -187,10 +188,14 @@ export default function LandingChatWidget() {
       setConfig(widgetConfig);
 
       if (!widgetConfig.enabled) {
+        const reason = widgetConfig.disabledReason;
         setError(
-          'Assistant is not live for this store yet. Add a store URL, sync inventory, and ensure products are available in the dashboard.'
+          reason === 'unauthorized_domain'
+            ? 'This demo chatbot is not authorized for this domain. Set CLIENT_URL on the API to your Vercel URL (e.g. https://projectclient-zeta.vercel.app).'
+            : reason === 'no_inventory'
+              ? 'No recommendable products are available yet. Sync E-Liquid inventory in the dashboard.'
+              : 'Assistant is not live for this store yet. Complete setup, sync inventory, and ensure your subscription is active.'
         );
-        setLoading(false);
         return;
       }
 
@@ -224,11 +229,10 @@ export default function LandingChatWidget() {
           /* ignore */
         }
       }
-
-      bootstrappedRef.current = true;
     } catch (err) {
       setError(err.message || 'Unable to connect to VapePass Assistant');
     } finally {
+      bootstrappedRef.current = true;
       setLoading(false);
     }
   }, [storeId, storageKey, guidedKey, applySession]);
