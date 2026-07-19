@@ -548,10 +548,12 @@ export default function LandingChatWidget() {
             className="chat-widget-warning px-4 py-2.5 flex items-start gap-2 text-[12px] leading-snug font-medium flex-shrink-0"
             role="note"
           >
-            <span className="flex items-center gap-0.5 flex-shrink-0 mt-0.5" aria-hidden="true">
-              <AlertTriangle size={13} className="text-amber-600" strokeWidth={2.25} />
-              <AlertTriangle size={13} className="text-amber-500 fill-amber-400" strokeWidth={2} />
-            </span>
+            <AlertTriangle
+              size={13}
+              className="text-amber-600 flex-shrink-0 mt-0.5"
+              strokeWidth={2.25}
+              aria-hidden="true"
+            />
             <span>{healthWarning}</span>
           </div>
 
