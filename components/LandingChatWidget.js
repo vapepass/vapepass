@@ -190,15 +190,22 @@ export default function LandingChatWidget() {
           matchIntent,
           preferenceMessagesRef.current
         );
+        // Only real product/flavor labels — never action chips like "Get Another Recommendation"
+        const actionLabelRe =
+          /\b(get another|another recommendation|something else|start over|view product)\b/i;
         const variants = [
           ...new Set(
             [
-              ...optionList.map((o) => o.label),
               ...(Array.isArray(session.products)
                 ? session.products
                     .map((p) => p.variantName || p.flavor)
                     .filter(Boolean)
                 : []),
+              product?.variantName,
+              product?.flavor,
+              ...optionList
+                .map((o) => o.label)
+                .filter((label) => label && !actionLabelRe.test(String(label))),
             ].filter(Boolean)
           ),
         ].slice(0, 12);

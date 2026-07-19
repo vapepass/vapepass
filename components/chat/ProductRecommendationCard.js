@@ -51,7 +51,11 @@ export default function ProductRecommendationCard({
         variant,
       ]
         .map((v) => String(v || '').trim())
-        .filter(Boolean)
+        .filter(
+          (v) =>
+            v &&
+            !/\b(get another|another recommendation|something else|start over)\b/i.test(v)
+        )
     ),
   ];
 
