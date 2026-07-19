@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Sparkles, X, Send, AlertTriangle, Minimize2, RefreshCw } from 'lucide-react';
+import { Sparkles, X, Send, AlertTriangle, Minimize2 } from 'lucide-react';
 import {
   getAssistantWidgetConfig,
   startAssistantSession,
@@ -18,7 +18,6 @@ import {
 } from '@/lib/chat/conversation-flow';
 import TypingIndicator from '@/components/chat/TypingIndicator';
 import ChatMessageList from '@/components/chat/ChatMessageList';
-import OptionChips from '@/components/chat/OptionChips';
 
 const SESSION_KEY_PREFIX = 'vapepass_landing_session_';
 const GUIDED_KEY_PREFIX = 'vapepass_guided_state_';
@@ -36,7 +35,18 @@ function resolveStoreId(searchParams) {
 }
 
 function createWelcomeTimeline() {
-  return [{ id: nextId(), kind: 'welcome', role: 'assistant' }];
+  return [{ id: nextId(), kind: 'welcome', role: 'assistant', ageActionsActive: true }];
+}
+
+function deactivateInteractiveActions(timeline) {
+  return timeline.map((item) => {
+    if (!item.optionsActive && !item.ageActionsActive) return item;
+    return {
+      ...item,
+      optionsActive: false,
+      ageActionsActive: false,
+    };
+  });
 }
 
 function productFromApi(product) {
@@ -126,9 +136,35 @@ export default function LandingChatWidget() {
       const reply = session.reply || '';
 
       if (replyType === 'options' && options.length) {
-        if (appendAssistantText && reply) {
-          appendTimeline({ id: nextId(), kind: 'text', role: 'assistant', content: reply });
-        }
+        setTimeline((prev) => {
+          const cleared = deactivateInteractiveActions(prev);
+          if (appendAssistantText && reply) {
+            return [
+              ...cleared,
+              {
+                id: nextId(),
+                kind: 'text',
+                role: 'assistant',
+                content: reply,
+                options,
+                optionsActive: true,
+              },
+            ];
+          }
+          // Attach options to the latest assistant text if we didn't append a new reply
+          const next = [...cleared];
+          for (let i = next.length - 1; i >= 0; i -= 1) {
+            if (next[i].role === 'assistant' && next[i].kind === 'text') {
+              next[i] = {
+                ...next[i],
+                options,
+                optionsActive: true,
+              };
+              break;
+            }
+          }
+          return next;
+        });
         setCurrentOptions(options);
         setFlowStep(FLOW_STEPS.OPTIONS);
         setRecommendedProduct(null);
@@ -138,37 +174,75 @@ export default function LandingChatWidget() {
       if (replyType === 'recommendation' || (Array.isArray(session.products) && session.products.length)) {
         const apiProduct = session.products?.[0];
         const product = productFromApi(apiProduct);
-        if (product) {
-          setRecommendedProduct(product);
-          appendTimeline({
-            id: nextId(),
-            kind: 'product',
-            role: 'assistant',
-            intro: reply,
-            product,
-            disclaimer: null,
-          });
-          appendTimeline({
-            id: nextId(),
-            kind: 'text',
-            role: 'assistant',
-            content: ANOTHER_REC_PROMPT,
-          });
-        } else if (reply) {
-          appendTimeline({ id: nextId(), kind: 'text', role: 'assistant', content: reply });
-        }
-        setCurrentOptions(normalizeOptions(session.options));
+        const followUpOptions =
+          options.length > 0
+            ? options
+            : [
+                {
+                  id: 'another',
+                  label: 'Get Another Recommendation',
+                  value: 'I want another recommendation',
+                },
+              ];
+
+        setTimeline((prev) => {
+          const cleared = deactivateInteractiveActions(prev);
+          const items = [...cleared];
+          if (product) {
+            items.push({
+              id: nextId(),
+              kind: 'product',
+              role: 'assistant',
+              intro: reply,
+              product,
+              disclaimer: null,
+            });
+            items.push({
+              id: nextId(),
+              kind: 'text',
+              role: 'assistant',
+              content: ANOTHER_REC_PROMPT,
+              options: followUpOptions,
+              optionsActive: true,
+            });
+          } else if (reply) {
+            items.push({
+              id: nextId(),
+              kind: 'text',
+              role: 'assistant',
+              content: reply,
+              options: followUpOptions,
+              optionsActive: true,
+            });
+          }
+          return items;
+        });
+
+        setRecommendedProduct(product);
+        setCurrentOptions(followUpOptions);
         setFlowStep(FLOW_STEPS.RECOMMENDATION);
         return;
       }
 
-      if (appendAssistantText && reply) {
-        appendTimeline({ id: nextId(), kind: 'text', role: 'assistant', content: reply });
-      }
-      setCurrentOptions(normalizeOptions(session.options));
+      setTimeline((prev) => {
+        const cleared = deactivateInteractiveActions(prev);
+        if (!(appendAssistantText && reply)) return cleared;
+        return [
+          ...cleared,
+          {
+            id: nextId(),
+            kind: 'text',
+            role: 'assistant',
+            content: reply,
+            options: options.length ? options : undefined,
+            optionsActive: options.length > 0,
+          },
+        ];
+      });
+      setCurrentOptions(options);
       setFlowStep(session.locked ? FLOW_STEPS.LOCKED : FLOW_STEPS.FREE_CHAT);
     },
-    [appendTimeline]
+    []
   );
 
   const bootstrap = useCallback(async () => {
@@ -211,23 +285,44 @@ export default function LandingChatWidget() {
       const session = await startAssistantSession(storeId, existingKey || undefined);
       applySession(session);
 
+      let restoredGuided = false;
       if (guidedKey) {
         try {
           const saved = sessionStorage.getItem(guidedKey);
           if (saved) {
             const parsed = JSON.parse(saved);
             if (parsed.timeline?.length) {
-              setTimeline(parsed.timeline);
+              let restored = parsed.timeline;
+              if (session.ageVerified) {
+                restored = restored.map((item) => ({ ...item, ageActionsActive: false }));
+              }
+              // Only the most recent option group stays interactive
+              let lastOptionsIdx = -1;
+              restored.forEach((item, idx) => {
+                if (item.optionsActive) lastOptionsIdx = idx;
+              });
+              restored = restored.map((item, idx) => ({
+                ...item,
+                optionsActive: idx === lastOptionsIdx,
+              }));
+
+              setTimeline(restored);
               setRecommendedProduct(parsed.recommendedProduct || null);
               setCurrentOptions(parsed.currentOptions || []);
               if (!session.locked) {
                 setFlowStep(parsed.step || FLOW_STEPS.OPTIONS);
               }
+              restoredGuided = true;
             }
           }
         } catch {
           /* ignore */
         }
+      }
+
+      if (!restoredGuided && session.ageVerified && !session.locked) {
+        setTimeline((prev) => deactivateInteractiveActions(prev));
+        setFlowStep(FLOW_STEPS.FREE_CHAT);
       }
     } catch (err) {
       setError(err.message || 'Unable to connect to VapePass Assistant');
@@ -274,13 +369,16 @@ export default function LandingChatWidget() {
             session.reply ||
             session.messages?.[session.messages.length - 1]?.content ||
             'This conversation has ended.';
-          appendTimeline({
-            id: nextId(),
-            kind: 'text',
-            role: 'assistant',
-            content: lockContent,
-            variant: 'locked',
-          });
+          setTimeline((prev) => [
+            ...deactivateInteractiveActions(prev),
+            {
+              id: nextId(),
+              kind: 'text',
+              role: 'assistant',
+              content: lockContent,
+              variant: 'locked',
+            },
+          ]);
           setFlowStep(FLOW_STEPS.LOCKED);
           setCurrentOptions([]);
         }
@@ -304,12 +402,15 @@ export default function LandingChatWidget() {
   const ageYesLabel = config?.ageYesLabel ?? getAgeYesLabel(legalAge);
 
   const handleAgeYes = async () => {
-    appendTimeline({
-      id: nextId(),
-      kind: 'text',
-      role: 'user',
-      content: ageYesLabel,
-    });
+    setTimeline((prev) => [
+      ...deactivateInteractiveActions(prev),
+      {
+        id: nextId(),
+        kind: 'text',
+        role: 'user',
+        content: ageYesLabel,
+      },
+    ]);
     setSending(true);
     try {
       const session = await sendAssistantMessage(storeId, sessionKey, ageYesLabel);
@@ -330,12 +431,15 @@ export default function LandingChatWidget() {
   };
 
   const handleAgeNo = async () => {
-    appendTimeline({
-      id: nextId(),
-      kind: 'text',
-      role: 'user',
-      content: 'No',
-    });
+    setTimeline((prev) => [
+      ...deactivateInteractiveActions(prev),
+      {
+        id: nextId(),
+        kind: 'text',
+        role: 'user',
+        content: 'No',
+      },
+    ]);
     setSending(true);
     try {
       const session = await sendAssistantMessage(storeId, sessionKey, 'No');
@@ -368,14 +472,43 @@ export default function LandingChatWidget() {
   };
 
   const handleOptionSelect = async (option) => {
-    appendTimeline({
-      id: nextId(),
-      kind: 'text',
-      role: 'user',
-      content: formatUserChoice(option),
-    });
+    setTimeline((prev) => [
+      ...deactivateInteractiveActions(prev),
+      {
+        id: nextId(),
+        kind: 'text',
+        role: 'user',
+        content: formatUserChoice(option),
+      },
+    ]);
     setCurrentOptions([]);
     setFlowStep(FLOW_STEPS.FETCHING);
+
+    if (option.id === 'another') {
+      setRecommendedProduct(null);
+      setSending(true);
+      try {
+        const session = await sendAssistantMessage(
+          storeId,
+          sessionKey,
+          option.value || 'I want another recommendation'
+        );
+        applySession(session);
+        applyGuidedReply(session);
+      } catch (err) {
+        appendTimeline({
+          id: nextId(),
+          kind: 'text',
+          role: 'assistant',
+          content: err.message || 'Something went wrong. Please try again.',
+        });
+        setFlowStep(FLOW_STEPS.FREE_CHAT);
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
     // Prefer structured option id so backend matching is reliable
     await submitMessage(`::option::${option.id}`, { silent: true });
   };
@@ -383,12 +516,15 @@ export default function LandingChatWidget() {
   const handleAnotherRecommendation = async () => {
     setRecommendedProduct(null);
     setCurrentOptions([]);
-    appendTimeline({
-      id: nextId(),
-      kind: 'text',
-      role: 'user',
-      content: 'I want another recommendation',
-    });
+    setTimeline((prev) => [
+      ...deactivateInteractiveActions(prev),
+      {
+        id: nextId(),
+        kind: 'text',
+        role: 'user',
+        content: 'I want another recommendation',
+      },
+    ]);
     setSending(true);
     try {
       const session = await sendAssistantMessage(
@@ -423,6 +559,7 @@ export default function LandingChatWidget() {
     }
 
     setCurrentOptions([]);
+    setTimeline((prev) => deactivateInteractiveActions(prev));
     await submitMessage(text);
   };
 
@@ -430,24 +567,15 @@ export default function LandingChatWidget() {
     config?.healthWarning ||
     `Vaping products contain nicotine, which is addictive. For adults ${legalAge}+ only.`;
 
-  const showAgeButtons =
+  const showAgeGate =
     flowStep === FLOW_STEPS.AGE_VERIFY && !ageVerified && !locked && !loading && !error && sessionKey;
-
-  const showOptionChips =
-    flowStep === FLOW_STEPS.OPTIONS && currentOptions.length > 0 && !sending && !locked;
-
-  const showAnotherRecButton =
-    (flowStep === FLOW_STEPS.RECOMMENDATION || currentOptions.some((o) => o.id === 'another')) &&
-    !sending &&
-    !locked &&
-    ageVerified &&
-    !showOptionChips;
 
   const showComposer =
     (flowStep === FLOW_STEPS.FREE_CHAT ||
       flowStep === FLOW_STEPS.RECOMMENDATION ||
       flowStep === FLOW_STEPS.LOCKED ||
-      flowStep === FLOW_STEPS.OPTIONS) &&
+      flowStep === FLOW_STEPS.OPTIONS ||
+      flowStep === FLOW_STEPS.FETCHING) &&
     (ageVerified || locked);
 
   const handleOpen = () => {
@@ -497,11 +625,7 @@ export default function LandingChatWidget() {
 
       {open && !minimized && (
         <div
-          className={`fixed bottom-24 right-4 sm:right-6 z-50 w-[min(380px,calc(100vw-2rem))] bg-white rounded-[24px] chat-widget-panel flex flex-col overflow-hidden animate-fade-in ${
-            showAgeButtons
-              ? 'h-fit max-h-none'
-              : 'h-[min(560px,calc(100vh-7rem))] max-h-[min(560px,calc(100vh-7rem))]'
-          }`}
+          className="fixed bottom-24 right-4 sm:right-6 z-50 w-[min(380px,calc(100vw-2rem))] bg-white rounded-[24px] chat-widget-panel flex flex-col overflow-hidden animate-fade-in h-[min(560px,calc(100vh-7rem))] max-h-[min(560px,calc(100vh-7rem))]"
           role="dialog"
           aria-label="AI Flavor Sommelier"
         >
@@ -565,68 +689,29 @@ export default function LandingChatWidget() {
           )}
 
           <div
-            className={`chat-widget-messages overflow-y-auto px-4 py-4 bg-white space-y-3 ${
-              showAgeButtons ? 'flex-none' : 'flex-1'
-            }`}
+            className="chat-widget-messages overflow-y-auto px-4 py-4 bg-white space-y-3 flex-1"
             role="log"
             aria-live="polite"
           >
             {loading && (
               <p className="text-center text-sm text-[#9ca3af] py-8">Loading live assistant…</p>
             )}
-            {!loading && <ChatMessageList timeline={timeline} legalAge={legalAge} />}
+            {!loading && (
+              <ChatMessageList
+                timeline={timeline}
+                sending={sending}
+                legalAge={legalAge}
+                showAgeActions={showAgeGate}
+                onOptionSelect={handleOptionSelect}
+                onAgeYes={handleAgeYes}
+                onAgeNo={handleAgeNo}
+              />
+            )}
             {sending && <TypingIndicator />}
             <div ref={messagesEndRef} />
           </div>
 
-          {showAgeButtons && (
-            <div className="px-4 pb-5 pt-2 flex-shrink-0 animate-fade-in bg-white">
-              <div className="chat-widget-age-actions">
-                <button
-                  type="button"
-                  onClick={handleAgeYes}
-                  disabled={sending}
-                  className="chat-widget-age-yes h-11 disabled:opacity-50"
-                >
-                  Yes, I&apos;m {legalAge}+
-                </button>
-                <button
-                  type="button"
-                  onClick={handleAgeNo}
-                  disabled={sending}
-                  className="chat-widget-age-no h-11 disabled:opacity-50"
-                >
-                  No
-                </button>
-              </div>
-            </div>
-          )}
-
-          {showOptionChips && (
-            <div className="px-4 pb-4 pt-1 flex-shrink-0">
-              <OptionChips
-                options={currentOptions}
-                onSelect={handleOptionSelect}
-                disabled={sending}
-                columns={2}
-              />
-            </div>
-          )}
-
-          {showAnotherRecButton && (
-            <div className="px-4 pb-3 pt-1 flex-shrink-0 animate-fade-in">
-              <button
-                type="button"
-                onClick={handleAnotherRecommendation}
-                className="w-full h-11 rounded-full border border-[#e5e7eb] bg-[#f9fafb] text-[13px] font-semibold text-[#374151] flex items-center justify-center gap-2 hover:bg-[#f3f4f6]"
-              >
-                <RefreshCw size={15} />
-                Get Another Recommendation
-              </button>
-            </div>
-          )}
-
-          {showComposer && !showAgeButtons && (
+          {showComposer && (
             <>
               <p className="px-4 py-2 text-[11px] text-[#9ca3af] border-t border-[#f3f4f6] bg-white flex-shrink-0">
                 {locked

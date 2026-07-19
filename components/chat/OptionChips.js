@@ -7,6 +7,7 @@ export default function OptionChips({ options, onSelect, disabled = false, colum
     <div
       className={`grid gap-2 ${columns === 1 ? 'grid-cols-1' : 'grid-cols-2'} animate-fade-in`}
       role="group"
+      aria-disabled={disabled || undefined}
     >
       {options.map((option) => {
         const Icon = resolveOptionIcon(option);
@@ -14,9 +15,12 @@ export default function OptionChips({ options, onSelect, disabled = false, colum
           <button
             key={option.id}
             type="button"
-            onClick={() => onSelect(option)}
+            onClick={() => onSelect?.(option)}
             disabled={disabled}
-            className="chat-widget-option-chip flex items-center justify-center gap-1.5 min-h-[44px] px-3 py-2.5 text-[13px] font-medium text-[#374151] disabled:opacity-50"
+            className={[
+              'chat-widget-option-chip flex items-center justify-center gap-1.5 min-h-[44px] px-3 py-2.5 text-[13px] font-medium text-[#374151]',
+              disabled ? 'opacity-55 cursor-default' : '',
+            ].join(' ')}
           >
             {Icon ? <Icon size={15} className="flex-shrink-0 text-brand-600" aria-hidden="true" /> : null}
             <span>{option.label}</span>
