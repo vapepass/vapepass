@@ -379,24 +379,27 @@ export default function LandingChatWidget() {
 
       // Keep chat bubbles natural; map clear preferences to option ids when possible.
       const intent = extractIntent(trimmed);
-      preferenceMessagesRef.current = [...preferenceMessagesRef.current, trimmed].slice(-12);
-      const prevIntent = preferenceIntentRef.current;
-      preferenceIntentRef.current = {
-        ...intent,
-        lookingFor: [
-          ...new Set([...(prevIntent?.lookingFor || []), ...(intent.lookingFor || [])]),
-        ].slice(0, 10),
-        excludes: [
-          ...new Set([...(prevIntent?.excludes || []), ...(intent.excludes || [])]),
-        ],
-        productType: intent.productType || prevIntent?.productType || null,
-        flavor: intent.flavor || prevIntent?.flavor || null,
-        category: intent.category || prevIntent?.category || null,
-        cooling: intent.cooling || prevIntent?.cooling || null,
-        sweetness: intent.sweetness || prevIntent?.sweetness || null,
-      };
-
       const nluHit = matchOptionWithNlu(trimmed, lastApiOptionsRef.current);
+
+      if (nluHit || intent.lookingFor?.length) {
+        preferenceMessagesRef.current = [...preferenceMessagesRef.current, trimmed].slice(-12);
+        const prevIntent = preferenceIntentRef.current;
+        preferenceIntentRef.current = {
+          ...intent,
+          lookingFor: [
+            ...new Set([...(prevIntent?.lookingFor || []), ...(intent.lookingFor || [])]),
+          ].slice(0, 10),
+          excludes: [
+            ...new Set([...(prevIntent?.excludes || []), ...(intent.excludes || [])]),
+          ],
+          productType: intent.productType || prevIntent?.productType || null,
+          flavor: intent.flavor || prevIntent?.flavor || null,
+          category: intent.category || prevIntent?.category || null,
+          cooling: intent.cooling || prevIntent?.cooling || null,
+          sweetness: intent.sweetness || prevIntent?.sweetness || null,
+        };
+      }
+
       const matched = nluHit?.option || null;
       const outbound = matched
         ? `::option::${matched.id}`
