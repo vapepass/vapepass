@@ -325,7 +325,10 @@ export default function Settings() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
                 {[
-                  { label: 'Billing provider', value: billingInfo?.configured ? 'Stripe' : 'Not configured' },
+                  {
+                    label: 'Billing provider',
+                    value: billingInfo?.billingProvider || 'Not Available',
+                  },
                   { label: 'Status', value: getSubscriptionStatusLabel(store?.subscriptionStatus) },
                   {
                     label: 'Renewal date',
