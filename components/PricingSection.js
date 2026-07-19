@@ -25,6 +25,7 @@ const initialForm = {
   ownerName: '',
   phone: '',
   startDate: '',
+  message: '',
 };
 
 export default function PricingSection() {
@@ -43,7 +44,6 @@ export default function PricingSection() {
     if (!form.storeName.trim()) next.storeName = 'Store name is required';
     if (!form.ownerName.trim()) next.ownerName = "Owner's name is required";
     if (!form.phone.trim()) next.phone = 'Phone number is required';
-    if (!form.startDate.trim()) next.startDate = 'Please select when you want to start';
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -123,10 +123,10 @@ export default function PricingSection() {
               ) : (
                 <form onSubmit={handleSubmit} noValidate>
                   <h3 className="text-[17px] sm:text-lg font-bold text-[#111827] mb-6 sm:mb-7 tracking-[-0.01em]">
-                    Get started — fill out your info
+                    Contact US — fill out your info
                   </h3>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
                     <FormField label="Store Name" htmlFor="storeName" error={errors.storeName} required className="[&_label]:text-[13px] [&_label]:text-[#6b7280] [&_label]:font-normal [&_label]:mb-1.5">
                       <Input
                         id="storeName"
@@ -163,7 +163,7 @@ export default function PricingSection() {
                       />
                     </FormField>
 
-                    <FormField label="When do you want to start?" htmlFor="startDate" error={errors.startDate} required className="[&_label]:text-[13px] [&_label]:text-[#6b7280] [&_label]:font-normal [&_label]:mb-1.5">
+                    <FormField label="When do you want to start?" htmlFor="startDate" className="[&_label]:text-[13px] [&_label]:text-[#6b7280] [&_label]:font-normal [&_label]:mb-1.5">
                       <div className="relative">
                         <Input
                           id="startDate"
@@ -172,7 +172,6 @@ export default function PricingSection() {
                           className="h-11 rounded-lg pr-10 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                           value={form.startDate}
                           onChange={set('startDate')}
-                          error={Boolean(errors.startDate)}
                         />
                         <Calendar
                           size={16}
@@ -182,6 +181,28 @@ export default function PricingSection() {
                       </div>
                     </FormField>
                   </div>
+
+                  <FormField
+                    label="Message"
+                    htmlFor="pricing-message"
+                    hint="Optional"
+                    className="mb-6 [&_label]:text-[13px] [&_label]:text-[#6b7280] [&_label]:font-normal [&_label]:mb-1.5"
+                  >
+                    <textarea
+                      id="pricing-message"
+                      name="message"
+                      rows={4}
+                      value={form.message}
+                      onChange={set('message')}
+                      placeholder="Tell us about your store, goals, or any questions…"
+                      className={[
+                        'w-full resize-y rounded-lg border bg-surface px-3.5 py-3 text-sm text-ink',
+                        'placeholder:text-muted transition-all duration-[var(--duration-fast)]',
+                        'focus:outline-none focus:ring-[3px]',
+                        'border-line focus:border-brand-500 focus:ring-brand-500/15',
+                      ].join(' ')}
+                    />
+                  </FormField>
 
                   <button
                     type="submit"
@@ -203,7 +224,7 @@ export default function PricingSection() {
                       </>
                     ) : (
                       <>
-                        Get Started — $100/mo
+                        Contact US — $100/mo
                         <ArrowRight size={16} aria-hidden="true" />
                       </>
                     )}
