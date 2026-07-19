@@ -17,7 +17,7 @@ import { useAuth } from '@/context/AuthContext';
 import { storeToForm, CANADIAN_PROVINCES, COUNTRY_OPTIONS } from '@/lib/store-utils';
 import { ApiError, fieldErrorsToMap } from '@/lib/api';
 import { getBillingInfo, createCheckoutSession, createBillingPortal } from '@/lib/billing-api';
-import { getSubscriptionBadgeVariant, getSubscriptionStatusLabel } from '@/lib/subscription';
+import { getSubscriptionBadgeVariant, getSubscriptionStatusLabel, canAccessDashboard } from '@/lib/subscription';
 import AutoSubscriptionSettings from '@/components/settings/AutoSubscriptionSettings';
 
 export default function Settings() {
@@ -151,6 +151,14 @@ export default function Settings() {
   ];
 
   const storeForm = storeToForm(store);
+  const subscriptionStatus = billingInfo?.subscriptionStatus || store?.subscriptionStatus;
+  /** Active / past_due already have a plan — do not offer checkout again */
+  const showSubscribeButton = !canAccessDashboard(subscriptionStatus);
+  const showManageSubscription =
+    Boolean(billingInfo?.hasStripeSubscription) ||
+    Boolean(store?.stripeCustomerId) ||
+    Boolean(billingInfo?.billingProvider && billingInfo.billingProvider !== 'Not Available') ||
+    canAccessDashboard(subscriptionStatus);
 
   if (pageLoading) {
     return (
@@ -318,8 +326,8 @@ export default function Settings() {
                     <p className="text-body text-sm">${billingInfo?.monthlyPrice ?? 99} / month</p>
                   </div>
                 </div>
-                <Badge variant={getSubscriptionBadgeVariant(store?.subscriptionStatus)}>
-                  {getSubscriptionStatusLabel(store?.subscriptionStatus)}
+                <Badge variant={getSubscriptionBadgeVariant(subscriptionStatus)}>
+                  {getSubscriptionStatusLabel(subscriptionStatus)}
                 </Badge>
               </div>
 
@@ -329,7 +337,18 @@ export default function Settings() {
                     label: 'Billing provider',
                     value: billingInfo?.billingProvider || 'Not Available',
                   },
-                  { label: 'Status', value: getSubscriptionStatusLabel(store?.subscriptionStatus) },
+                  {
+                    label: 'Status',
+                    value: getSubscriptionStatusLabel(subscriptionStatus),
+                  },
+                  {
+                    label: 'Subscription start',
+                    value: billingInfo?.subscriptionStartDate || store?.subscriptionStartDate
+                      ? new Date(
+                          billingInfo?.subscriptionStartDate || store.subscriptionStartDate
+                        ).toLocaleDateString()
+                      : '—',
+                  },
                   {
                     label: 'Renewal date',
                     value: billingInfo?.nextBillingDate || store?.nextBillingDate
@@ -342,6 +361,15 @@ export default function Settings() {
                       ? new Date(billingInfo?.subscriptionEndDate || store.subscriptionEndDate).toLocaleDateString()
                       : '—',
                   },
+                  {
+                    label: 'Auto Subscription',
+                    value:
+                      billingInfo?.autoRenew === false
+                        ? 'Off'
+                        : canAccessDashboard(subscriptionStatus)
+                          ? 'On'
+                          : '—',
+                  },
                 ].map(({ label, value }) => (
                   <div key={label} className="px-4 py-3.5 rounded-xl bg-canvas border border-line-subtle">
                     <p className="text-muted text-xs mb-1">{label}</p>
@@ -350,14 +378,20 @@ export default function Settings() {
                 ))}
               </div>
 
-              <div className="flex flex-wrap gap-3">
-                <Button variant="secondary" size="sm" onClick={startCheckout} disabled={billingLoading}>
-                  <CreditCard size={14} /> Subscribe — $99/mo
-                </Button>
-                <Button variant="secondary" size="sm" onClick={openPortal} disabled={billingLoading}>
-                  Manage Subscription
-                </Button>
-              </div>
+              {(showSubscribeButton || showManageSubscription) && (
+                <div className="flex flex-wrap gap-3">
+                  {showSubscribeButton && (
+                    <Button variant="secondary" size="sm" onClick={startCheckout} disabled={billingLoading}>
+                      <CreditCard size={14} /> Subscribe — $99/mo
+                    </Button>
+                  )}
+                  {showManageSubscription && (
+                    <Button variant="secondary" size="sm" onClick={openPortal} disabled={billingLoading}>
+                      Manage Subscription
+                    </Button>
+                  )}
+                </div>
+              )}
             </Card>
 
             <AutoSubscriptionSettings
@@ -380,7 +414,9 @@ export default function Settings() {
             <Card>
               <CardTitle>Billing History</CardTitle>
               <p className="text-sm text-body mt-3">
-                Invoice history is available in the Stripe customer portal after you subscribe.
+                {canAccessDashboard(subscriptionStatus)
+                  ? 'View invoices and update your payment method in the customer portal via Manage Subscription.'
+                  : 'Invoice history is available in the customer portal after you subscribe.'}
               </p>
             </Card>
               </>
