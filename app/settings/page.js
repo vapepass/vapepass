@@ -11,19 +11,32 @@ import Avatar from '@/components/ui/Avatar';
 import { Input, FormField } from '@/components/ui/Input';
 import { ContentReveal } from '@/components/ui/Skeleton';
 import SettingsSkeleton, { BillingSkeleton } from '@/components/skeletons/SettingsSkeleton';
-import { Save, CheckCircle, CreditCard, Zap } from 'lucide-react';
+import { Save, CheckCircle, CreditCard, Zap, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/context/AuthContext';
 import { storeToForm, CANADIAN_PROVINCES, COUNTRY_OPTIONS } from '@/lib/store-utils';
 import { ApiError, fieldErrorsToMap } from '@/lib/api';
-import { getBillingInfo, createCheckoutSession, createBillingPortal } from '@/lib/billing-api';
+import {
+  getBillingInfo,
+  createCheckoutSession,
+  createBillingPortal,
+  retryPayment,
+} from '@/lib/billing-api';
 import { getSubscriptionBadgeVariant, getSubscriptionStatusLabel, canAccessDashboard } from '@/lib/subscription';
 import AutoSubscriptionSettings from '@/components/settings/AutoSubscriptionSettings';
 
 export default function Settings() {
   const { toast } = useToast();
   const searchParams = useSearchParams();
-  const { user, store, updateStore, updateProfile, loading: authLoading, storeLoading } = useAuth();
+  const {
+    user,
+    store,
+    updateStore,
+    updateProfile,
+    refreshStore,
+    loading: authLoading,
+    storeLoading,
+  } = useAuth();
   const initialTab = searchParams.get('tab') === 'billing' ? 'billing' : 'profile';
   const [tab, setTab] = useState(initialTab);
   const [saved, setSaved] = useState(false);
@@ -42,8 +55,16 @@ export default function Settings() {
   const [billingInfo, setBillingInfo] = useState(null);
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingFetching, setBillingFetching] = useState(false);
+  const [retryingPayment, setRetryingPayment] = useState(false);
+  const [retryError, setRetryError] = useState('');
 
   const pageLoading = authLoading || storeLoading || !store || !user;
+
+  const loadBillingInfo = async () => {
+    const info = await getBillingInfo();
+    setBillingInfo(info);
+    return info;
+  };
 
   useEffect(() => {
     if (store && user) {
@@ -65,10 +86,8 @@ export default function Settings() {
 
     let cancelled = false;
     setBillingFetching(true);
-    getBillingInfo()
-      .then((info) => {
-        if (!cancelled) setBillingInfo(info);
-      })
+    setRetryError('');
+    loadBillingInfo()
       .catch(() => {
         if (!cancelled) setBillingInfo(null);
       })
@@ -102,6 +121,36 @@ export default function Settings() {
       toast(err instanceof ApiError ? err.message : 'Unable to open billing portal', 'error');
     } finally {
       setBillingLoading(false);
+    }
+  };
+
+  const handleRetryPayment = async () => {
+    setRetryingPayment(true);
+    setRetryError('');
+    try {
+      const result = await retryPayment();
+      if (result.billing) setBillingInfo(result.billing);
+      else await loadBillingInfo();
+      await refreshStore().catch(() => {});
+      toast(
+        result.message || 'Payment successful. Your subscription is active again.',
+        'success'
+      );
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : 'We could not process your payment. Please try again or update your payment method.';
+      setRetryError(message);
+      toast(message, 'error');
+      try {
+        await loadBillingInfo();
+        await refreshStore();
+      } catch {
+        /* ignore refresh errors */
+      }
+    } finally {
+      setRetryingPayment(false);
     }
   };
 
@@ -152,13 +201,24 @@ export default function Settings() {
 
   const storeForm = storeToForm(store);
   const subscriptionStatus = billingInfo?.subscriptionStatus || store?.subscriptionStatus;
-  /** Active / past_due already have a plan — do not offer checkout again */
-  const showSubscribeButton = !canAccessDashboard(subscriptionStatus);
+  const paymentFailed =
+    Boolean(billingInfo?.paymentFailed) ||
+    subscriptionStatus === 'past_due' ||
+    subscriptionStatus === 'paused';
+  /** Active / past_due already have a plan — do not offer new checkout (retry uses existing sub) */
+  const showSubscribeButton =
+    !canAccessDashboard(subscriptionStatus) && subscriptionStatus !== 'paused';
   const showManageSubscription =
     Boolean(billingInfo?.hasStripeSubscription) ||
     Boolean(store?.stripeCustomerId) ||
     Boolean(billingInfo?.billingProvider && billingInfo.billingProvider !== 'Not Available') ||
-    canAccessDashboard(subscriptionStatus);
+    canAccessDashboard(subscriptionStatus) ||
+    paymentFailed;
+  const canRetryPayment =
+    paymentFailed &&
+    (billingInfo
+      ? Boolean(billingInfo.canRetryPayment)
+      : Boolean(store?.stripeSubscriptionId || store?.stripeCustomerId));
 
   if (pageLoading) {
     return (
@@ -315,6 +375,70 @@ export default function Settings() {
               <BillingSkeleton />
             ) : (
               <>
+            {paymentFailed && (
+              <Card className="border-amber-200 bg-amber-50 !p-5">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+                    <AlertTriangle size={18} className="text-warning-700" aria-hidden="true" />
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <p className="font-bold text-ink">Payment Failed</p>
+                        <Badge variant="warning">Payment Failed</Badge>
+                      </div>
+                      <p className="text-sm text-body leading-relaxed">
+                        {billingInfo?.paymentFailureMessage ||
+                          'We were unable to renew your subscription because your recent payment could not be processed. Please retry your payment to continue using VapePass without interruption.'}
+                      </p>
+                      {billingInfo?.openInvoice?.amountDue > 0 && (
+                        <p className="text-xs text-muted mt-2">
+                          Outstanding renewal:{' '}
+                          <span className="font-semibold text-ink">
+                            ${Number(billingInfo.openInvoice.amountDue).toFixed(2)}{' '}
+                            {billingInfo.openInvoice.currency || 'USD'}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+
+                    {retryError && (
+                      <p
+                        className="text-sm text-danger-600 bg-danger-50 border border-red-200 rounded-xl px-3 py-2.5"
+                        role="alert"
+                      >
+                        {retryError}
+                      </p>
+                    )}
+
+                    <div className="flex flex-wrap gap-2.5">
+                      {canRetryPayment && (
+                        <Button
+                          size="sm"
+                          onClick={handleRetryPayment}
+                          disabled={retryingPayment || billingLoading}
+                        >
+                          <RefreshCw
+                            size={14}
+                            className={retryingPayment ? 'animate-spin' : ''}
+                          />
+                          {retryingPayment ? 'Retrying…' : 'Retry Payment'}
+                        </Button>
+                      )}
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={openPortal}
+                        disabled={billingLoading || retryingPayment}
+                      >
+                        <CreditCard size={14} /> Update payment method
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
+
             <Card className="border-brand-200 ring-1 ring-brand-100">
               <div className="flex items-start justify-between mb-6">
                 <div className="flex items-center gap-3">
@@ -333,6 +457,14 @@ export default function Settings() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
                 {[
+                  {
+                    label: 'Payment status',
+                    value: paymentFailed
+                      ? 'Payment Failed'
+                      : subscriptionStatus === 'active'
+                        ? 'Paid'
+                        : getSubscriptionStatusLabel(subscriptionStatus),
+                  },
                   {
                     label: 'Billing provider',
                     value: billingInfo?.billingProvider || 'Not Available',
