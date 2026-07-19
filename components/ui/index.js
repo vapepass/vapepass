@@ -22,7 +22,7 @@ export { Input, InputGroup, InputIcon, Label, FormField } from './Input';
 export { default as Modal } from './Modal';
 export { default as PageHeader } from './PageHeader';
 export { default as Progress, StampProgress } from './Progress';
-export { default as Skeleton, SkeletonCard, SkeletonTable } from './Skeleton';
+export { default as Skeleton, SkeletonCard, SkeletonTable, ContentReveal } from './Skeleton';
 export { default as Spinner, SpinnerOverlay } from './Spinner';
 export { Table, TableHead, TableHeader, TableBody, TableRow, TableCell } from './Table';
 export { default as Tabs, FilterPills } from './Tabs';

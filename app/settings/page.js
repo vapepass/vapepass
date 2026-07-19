@@ -9,6 +9,8 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import Avatar from '@/components/ui/Avatar';
 import { Input, FormField } from '@/components/ui/Input';
+import { ContentReveal } from '@/components/ui/Skeleton';
+import SettingsSkeleton, { BillingSkeleton } from '@/components/skeletons/SettingsSkeleton';
 import { Save, CheckCircle, CreditCard, Zap } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/context/AuthContext';
@@ -21,7 +23,7 @@ import AutoSubscriptionSettings from '@/components/settings/AutoSubscriptionSett
 export default function Settings() {
   const { toast } = useToast();
   const searchParams = useSearchParams();
-  const { user, store, updateStore, updateProfile } = useAuth();
+  const { user, store, updateStore, updateProfile, loading: authLoading, storeLoading } = useAuth();
   const initialTab = searchParams.get('tab') === 'billing' ? 'billing' : 'profile';
   const [tab, setTab] = useState(initialTab);
   const [saved, setSaved] = useState(false);
@@ -39,6 +41,9 @@ export default function Settings() {
   const [logoFile, setLogoFile] = useState(null);
   const [billingInfo, setBillingInfo] = useState(null);
   const [billingLoading, setBillingLoading] = useState(false);
+  const [billingFetching, setBillingFetching] = useState(false);
+
+  const pageLoading = authLoading || storeLoading || !store || !user;
 
   useEffect(() => {
     if (store && user) {
@@ -56,9 +61,24 @@ export default function Settings() {
   }, [store, user]);
 
   useEffect(() => {
-    if (tab === 'billing') {
-      getBillingInfo().then(setBillingInfo).catch(() => {});
-    }
+    if (tab !== 'billing') return undefined;
+
+    let cancelled = false;
+    setBillingFetching(true);
+    getBillingInfo()
+      .then((info) => {
+        if (!cancelled) setBillingInfo(info);
+      })
+      .catch(() => {
+        if (!cancelled) setBillingInfo(null);
+      })
+      .finally(() => {
+        if (!cancelled) setBillingFetching(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [tab]);
 
   const startCheckout = async () => {
@@ -132,8 +152,17 @@ export default function Settings() {
 
   const storeForm = storeToForm(store);
 
+  if (pageLoading) {
+    return (
+      <DashboardLayout>
+        <SettingsSkeleton tab={tab} />
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
+      <ContentReveal>
       <PageHeader
         title="Business Settings"
         description="Manage your store account, plan, and preferences"
@@ -274,6 +303,10 @@ export default function Settings() {
 
         {tab === 'billing' && (
           <div className="space-y-5 animate-fade-in">
+            {billingFetching && !billingInfo ? (
+              <BillingSkeleton />
+            ) : (
+              <>
             <Card className="border-brand-200 ring-1 ring-brand-100">
               <div className="flex items-start justify-between mb-6">
                 <div className="flex items-center gap-3">
@@ -347,6 +380,8 @@ export default function Settings() {
                 Invoice history is available in the Stripe customer portal after you subscribe.
               </p>
             </Card>
+              </>
+            )}
           </div>
         )}
 
@@ -377,6 +412,7 @@ export default function Settings() {
           </Card>
         )}
       </div>
+      </ContentReveal>
     </DashboardLayout>
   );
 }

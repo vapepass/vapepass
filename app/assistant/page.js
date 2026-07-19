@@ -12,6 +12,10 @@ import Badge from '@/components/ui/Badge';
 import Toggle from '@/components/ui/Toggle';
 import { Input, FormField } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
+import { ContentReveal } from '@/components/ui/Skeleton';
+import AssistantSkeleton, {
+  InventoryTableSkeleton,
+} from '@/components/skeletons/AssistantSkeleton';
 import { ApiError } from '@/lib/api';
 import {
   getAssistantStatus,
@@ -288,7 +292,7 @@ export default function AssistantPage() {
   if (loading) {
     return (
       <DashboardLayout>
-        <PageHeader title="AI Assistant" description="Loading…" />
+        <AssistantSkeleton />
       </DashboardLayout>
     );
   }
@@ -305,6 +309,7 @@ export default function AssistantPage() {
 
   return (
     <DashboardLayout>
+      <ContentReveal>
       <PageHeader
         title="VapePass Assistant"
         description="Scrape your store inventory and power a compliant AI chatbot"
@@ -476,11 +481,13 @@ export default function AssistantPage() {
             </div>
 
             {products.length === 0 ? (
-              <p className="text-sm text-body">
-                {isSyncing
-                  ? 'Scraping in progress — products will appear here when finished.'
-                  : 'No products yet. Enter your store website URL and run a scrape.'}
-              </p>
+              isSyncing ? (
+                <InventoryTableSkeleton rows={5} />
+              ) : (
+                <p className="text-sm text-body">
+                  No products yet. Enter your store website URL and run a scrape.
+                </p>
+              )
             ) : (
               <div className="overflow-x-auto -mx-1">
                 <table className="w-full text-sm">
@@ -637,6 +644,7 @@ export default function AssistantPage() {
           </Card>
         </div>
       </div>
+      </ContentReveal>
     </DashboardLayout>
   );
 }
