@@ -1,10 +1,10 @@
 import ChatBubble from './ChatBubble';
 import ProductRecommendationCard from './ProductRecommendationCard';
 import WelcomeBubble from './WelcomeBubble';
-import OptionChips from './OptionChips';
 import { stripEmojis } from '@/lib/chat/icon-map';
 
-function AgeActionButtons({ legalAge, onYes, onNo, disabled }) {
+/** Only age-gate buttons — the rest of the chat is free-text. */
+function AgeActionButtons({ onYes, onNo, disabled }) {
   return (
     <div className="chat-widget-age-actions animate-fade-in max-w-[92%]">
       <button
@@ -13,7 +13,7 @@ function AgeActionButtons({ legalAge, onYes, onNo, disabled }) {
         disabled={disabled}
         className="chat-widget-age-yes h-11 disabled:opacity-50"
       >
-        Yes, I&apos;m {legalAge}+
+        Yes
       </button>
       <button
         type="button"
@@ -32,54 +32,36 @@ function TextTimelineItem({
   legalAge,
   sending,
   showAgeActions,
-  onOptionSelect,
   onAgeYes,
   onAgeNo,
 }) {
   if (item.kind === 'welcome') {
     return (
-      <div className="space-y-2.5">
+      <div className="space-y-3">
         <WelcomeBubble legalAge={legalAge} />
         {item.ageActionsActive && showAgeActions ? (
-          <AgeActionButtons
-            legalAge={legalAge}
-            onYes={onAgeYes}
-            onNo={onAgeNo}
-            disabled={sending}
-          />
+          <AgeActionButtons onYes={onAgeYes} onNo={onAgeNo} disabled={sending} />
         ) : null}
       </div>
     );
   }
 
   const content = stripEmojis(item.content || '');
-  if (!content && !item.options?.length) return null;
-
-  const hasOptions = Array.isArray(item.options) && item.options.length > 0;
-  const optionsInteractive = Boolean(item.optionsActive) && !sending;
+  if (!content) return null;
 
   return (
     <div className="space-y-2.5">
-      {content ? (
-        <ChatBubble role={item.role} variant={item.variant}>
-          {content.split('\n').map((line, i) => (
+      <ChatBubble role={item.role} variant={item.variant}>
+        {content.split('\n').map((line, i) =>
+          line.trim() ? (
             <p key={i} className={i > 0 ? 'mt-2' : ''}>
               {line}
             </p>
-          ))}
-        </ChatBubble>
-      ) : null}
-
-      {hasOptions && item.role === 'assistant' ? (
-        <div className="max-w-[92%]">
-          <OptionChips
-            options={item.options}
-            onSelect={onOptionSelect}
-            disabled={!optionsInteractive}
-            columns={2}
-          />
-        </div>
-      ) : null}
+          ) : (
+            <span key={i} className="block h-1.5" aria-hidden="true" />
+          )
+        )}
+      </ChatBubble>
     </div>
   );
 }
@@ -89,7 +71,6 @@ export default function ChatMessageList({
   sending = false,
   legalAge = 19,
   showAgeActions = false,
-  onOptionSelect,
   onAgeYes,
   onAgeNo,
 }) {
@@ -113,7 +94,6 @@ export default function ChatMessageList({
             legalAge={legalAge}
             sending={sending}
             showAgeActions={showAgeActions}
-            onOptionSelect={onOptionSelect}
             onAgeYes={onAgeYes}
             onAgeNo={onAgeNo}
           />

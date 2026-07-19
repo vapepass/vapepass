@@ -521,7 +521,7 @@ body {
   .chat-widget-add-cart,
   .chat-widget-view-product {
     background: #8b5cf6;
-    border-radius: 9999px;
+    border-radius: 12px;
     box-shadow: 0 4px 14px rgba(139, 92, 246, 0.35);
     transition: background 150ms ease, transform 150ms ease, box-shadow 150ms ease;
   }

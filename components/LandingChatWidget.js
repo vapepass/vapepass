@@ -12,10 +12,56 @@ import {
   FLOW_STEPS,
   ANOTHER_REC_PROMPT,
   getAgeYesLabel,
-  formatUserChoice,
+  getShoppingWelcomeMessage,
   detectsRecommendationRestart,
   normalizeOptions,
+  stripInteractiveOptions,
+  rewriteBrandQuestion,
 } from '@/lib/chat/conversation-flow';
+
+/** Prefer API reply text; if missing, turn option labels into a soft conversational prompt (no chips). */
+function replyTextFromSession(session) {
+  const reply = rewriteBrandQuestion(session?.reply || '');
+  if (reply) return reply;
+  const labels = normalizeOptions(session?.options)
+    .map((o) => o.label)
+    .filter(Boolean);
+  if (!labels.length) return '';
+  // Never surface brand-looking option lists as the main question
+  const preview = labels.slice(0, 6).join(', ');
+  const more = labels.length > 6 ? ', and more' : '';
+  return `Happy to help narrow it down. People often look for things like ${preview}${more}. What sounds closest to what you want?`;
+}
+
+/**
+ * Map free-text to a backend option id when the user clearly means a funnel choice.
+ * UI stays text-only; payload may use ::option::id for reliable matching.
+ */
+function matchOptionFromText(text, options = []) {
+  const t = String(text || '').trim().toLowerCase();
+  if (!t || !Array.isArray(options) || !options.length) return null;
+
+  const exact = options.find((o) => {
+    const label = String(o.label || '').toLowerCase();
+    const value = String(o.value || '').toLowerCase();
+    return t === label || t === value || t === String(o.id).toLowerCase();
+  });
+  if (exact) return exact;
+
+  const scored = options
+    .map((o) => {
+      const label = String(o.label || '').toLowerCase();
+      if (!label || label.length < 3) return null;
+      if (t.includes(label) || label.includes(t)) {
+        return { option: o, score: label.length };
+      }
+      return null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score);
+
+  return scored[0]?.option || null;
+}
 import TypingIndicator from '@/components/chat/TypingIndicator';
 import ChatMessageList from '@/components/chat/ChatMessageList';
 
@@ -88,6 +134,8 @@ export default function LandingChatWidget() {
 
   const messagesEndRef = useRef(null);
   const bootstrappedRef = useRef(false);
+  /** Last options from API — used only to map free text → ::option::id; never rendered as chips. */
+  const lastApiOptionsRef = useRef([]);
 
   const storageKey = storeId ? `${SESSION_KEY_PREFIX}${storeId}` : null;
   const guidedKey = storeId ? `${GUIDED_KEY_PREFIX}${storeId}` : null;
@@ -130,63 +178,23 @@ export default function LandingChatWidget() {
   );
 
   const applyGuidedReply = useCallback(
-    (session, { appendAssistantText = true } = {}) => {
-      const options = normalizeOptions(session.options);
+    (session, { appendAssistantText = true, prependMessages = [] } = {}) => {
       const replyType = session.replyType || 'text';
-      const reply = session.reply || '';
+      const reply = replyTextFromSession(session);
+      lastApiOptionsRef.current = normalizeOptions(session.options);
 
-      if (replyType === 'options' && options.length) {
-        setTimeline((prev) => {
-          const cleared = deactivateInteractiveActions(prev);
-          if (appendAssistantText && reply) {
-            return [
-              ...cleared,
-              {
-                id: nextId(),
-                kind: 'text',
-                role: 'assistant',
-                content: reply,
-                options,
-                optionsActive: true,
-              },
-            ];
-          }
-          // Attach options to the latest assistant text if we didn't append a new reply
-          const next = [...cleared];
-          for (let i = next.length - 1; i >= 0; i -= 1) {
-            if (next[i].role === 'assistant' && next[i].kind === 'text') {
-              next[i] = {
-                ...next[i],
-                options,
-                optionsActive: true,
-              };
-              break;
-            }
-          }
-          return next;
-        });
-        setCurrentOptions(options);
-        setFlowStep(FLOW_STEPS.OPTIONS);
-        setRecommendedProduct(null);
-        return;
-      }
+      // Text-first UX: never attach selectable option chips after age verification.
+      // Backend may still return options for funnel logic; we only show conversational text + product cards.
 
       if (replyType === 'recommendation' || (Array.isArray(session.products) && session.products.length)) {
         const apiProduct = session.products?.[0];
         const product = productFromApi(apiProduct);
-        const followUpOptions =
-          options.length > 0
-            ? options
-            : [
-                {
-                  id: 'another',
-                  label: 'Get Another Recommendation',
-                  value: 'I want another recommendation',
-                },
-              ];
 
         setTimeline((prev) => {
-          const cleared = deactivateInteractiveActions(prev);
+          const cleared = [
+            ...deactivateInteractiveActions(prev),
+            ...prependMessages,
+          ];
           const items = [...cleared];
           if (product) {
             items.push({
@@ -202,8 +210,6 @@ export default function LandingChatWidget() {
               kind: 'text',
               role: 'assistant',
               content: ANOTHER_REC_PROMPT,
-              options: followUpOptions,
-              optionsActive: true,
             });
           } else if (reply) {
             items.push({
@@ -211,21 +217,23 @@ export default function LandingChatWidget() {
               kind: 'text',
               role: 'assistant',
               content: reply,
-              options: followUpOptions,
-              optionsActive: true,
             });
           }
           return items;
         });
 
         setRecommendedProduct(product);
-        setCurrentOptions(followUpOptions);
+        setCurrentOptions([]);
         setFlowStep(FLOW_STEPS.RECOMMENDATION);
         return;
       }
 
+      // options / text / free chat — render as normal assistant bubbles only
       setTimeline((prev) => {
-        const cleared = deactivateInteractiveActions(prev);
+        const cleared = [
+          ...deactivateInteractiveActions(prev),
+          ...prependMessages,
+        ];
         if (!(appendAssistantText && reply)) return cleared;
         return [
           ...cleared,
@@ -234,12 +242,11 @@ export default function LandingChatWidget() {
             kind: 'text',
             role: 'assistant',
             content: reply,
-            options: options.length ? options : undefined,
-            optionsActive: options.length > 0,
           },
         ];
       });
-      setCurrentOptions(options);
+      setCurrentOptions([]);
+      setRecommendedProduct(null);
       setFlowStep(session.locked ? FLOW_STEPS.LOCKED : FLOW_STEPS.FREE_CHAT);
     },
     []
@@ -267,7 +274,7 @@ export default function LandingChatWidget() {
           reason === 'unauthorized_domain'
             ? 'This demo chatbot is not authorized for this domain. Set CLIENT_URL on the API to your Vercel URL (e.g. https://projectclient-zeta.vercel.app).'
             : reason === 'no_inventory'
-              ? 'No recommendable products are available yet. Sync E-Liquid inventory in the dashboard.'
+              ? 'No recommendable products are available yet. Sync store inventory in the dashboard.'
               : 'Assistant is not live for this store yet. Complete setup, sync inventory, and ensure your subscription is active.'
         );
         return;
@@ -292,25 +299,20 @@ export default function LandingChatWidget() {
           if (saved) {
             const parsed = JSON.parse(saved);
             if (parsed.timeline?.length) {
-              let restored = parsed.timeline;
+              let restored = stripInteractiveOptions(parsed.timeline);
               if (session.ageVerified) {
                 restored = restored.map((item) => ({ ...item, ageActionsActive: false }));
               }
-              // Only the most recent option group stays interactive
-              let lastOptionsIdx = -1;
-              restored.forEach((item, idx) => {
-                if (item.optionsActive) lastOptionsIdx = idx;
-              });
-              restored = restored.map((item, idx) => ({
-                ...item,
-                optionsActive: idx === lastOptionsIdx,
-              }));
 
               setTimeline(restored);
               setRecommendedProduct(parsed.recommendedProduct || null);
-              setCurrentOptions(parsed.currentOptions || []);
+              setCurrentOptions([]);
               if (!session.locked) {
-                setFlowStep(parsed.step || FLOW_STEPS.OPTIONS);
+                setFlowStep(
+                  session.ageVerified
+                    ? FLOW_STEPS.FREE_CHAT
+                    : FLOW_STEPS.AGE_VERIFY
+                );
               }
               restoredGuided = true;
             }
@@ -359,8 +361,12 @@ export default function LandingChatWidget() {
         });
       }
 
+      // Keep chat bubbles natural; map clear preferences to option ids when possible.
+      const matched = matchOptionFromText(trimmed, lastApiOptionsRef.current);
+      const outbound = matched ? `::option::${matched.id}` : trimmed;
+
       try {
-        const session = await sendAssistantMessage(storeId, sessionKey, trimmed);
+        const session = await sendAssistantMessage(storeId, sessionKey, outbound);
         applySession(session);
         if (!session.locked) {
           applyGuidedReply(session);
@@ -408,15 +414,25 @@ export default function LandingChatWidget() {
         id: nextId(),
         kind: 'text',
         role: 'user',
-        content: ageYesLabel,
+        content: 'Yes',
       },
     ]);
     setSending(true);
     try {
+      // Backend still receives the compliance age-affirmation phrase
       const session = await sendAssistantMessage(storeId, sessionKey, ageYesLabel);
       applySession(session);
       if (!session.locked) {
-        applyGuidedReply(session);
+        applyGuidedReply(session, {
+          prependMessages: [
+            {
+              id: nextId(),
+              kind: 'text',
+              role: 'assistant',
+              content: getShoppingWelcomeMessage(config?.storeName),
+            },
+          ],
+        });
       }
     } catch (err) {
       appendTimeline({
@@ -469,48 +485,6 @@ export default function LandingChatWidget() {
     } finally {
       setSending(false);
     }
-  };
-
-  const handleOptionSelect = async (option) => {
-    setTimeline((prev) => [
-      ...deactivateInteractiveActions(prev),
-      {
-        id: nextId(),
-        kind: 'text',
-        role: 'user',
-        content: formatUserChoice(option),
-      },
-    ]);
-    setCurrentOptions([]);
-    setFlowStep(FLOW_STEPS.FETCHING);
-
-    if (option.id === 'another') {
-      setRecommendedProduct(null);
-      setSending(true);
-      try {
-        const session = await sendAssistantMessage(
-          storeId,
-          sessionKey,
-          option.value || 'I want another recommendation'
-        );
-        applySession(session);
-        applyGuidedReply(session);
-      } catch (err) {
-        appendTimeline({
-          id: nextId(),
-          kind: 'text',
-          role: 'assistant',
-          content: err.message || 'Something went wrong. Please try again.',
-        });
-        setFlowStep(FLOW_STEPS.FREE_CHAT);
-      } finally {
-        setSending(false);
-      }
-      return;
-    }
-
-    // Prefer structured option id so backend matching is reliable
-    await submitMessage(`::option::${option.id}`, { silent: true });
   };
 
   const handleAnotherRecommendation = async () => {
@@ -570,13 +544,8 @@ export default function LandingChatWidget() {
   const showAgeGate =
     flowStep === FLOW_STEPS.AGE_VERIFY && !ageVerified && !locked && !loading && !error && sessionKey;
 
-  const showComposer =
-    (flowStep === FLOW_STEPS.FREE_CHAT ||
-      flowStep === FLOW_STEPS.RECOMMENDATION ||
-      flowStep === FLOW_STEPS.LOCKED ||
-      flowStep === FLOW_STEPS.OPTIONS ||
-      flowStep === FLOW_STEPS.FETCHING) &&
-    (ageVerified || locked);
+  // After age verification, composer stays available for free-text chat (including after recommendations).
+  const showComposer = Boolean(sessionKey) && ageVerified && !loading;
 
   const handleOpen = () => {
     setOpen(true);
@@ -607,7 +576,7 @@ export default function LandingChatWidget() {
             </div>
             <div className="min-w-0">
               <p className="font-semibold text-[15px] text-white tracking-[-0.01em] truncate">
-                AI Flavor Sommelier
+                AI Shopping Assistant
               </p>
               <p className="text-[11px] text-white/75 truncate">Powered by VapePass</p>
             </div>
@@ -627,7 +596,7 @@ export default function LandingChatWidget() {
         <div
           className="fixed bottom-24 right-4 sm:right-6 z-50 w-[min(380px,calc(100vw-2rem))] bg-white rounded-[24px] chat-widget-panel flex flex-col overflow-hidden animate-fade-in h-[min(560px,calc(100vh-7rem))] max-h-[min(560px,calc(100vh-7rem))]"
           role="dialog"
-          aria-label="AI Flavor Sommelier"
+          aria-label="AI Shopping Assistant"
         >
           <div className="chat-widget-header px-4 py-3.5 flex items-center justify-between gap-3 flex-shrink-0">
             <div className="flex items-center gap-3 min-w-0">
@@ -636,7 +605,7 @@ export default function LandingChatWidget() {
               </div>
               <div className="min-w-0">
                 <p className="font-semibold text-[15px] text-white tracking-[-0.01em] leading-tight">
-                  AI Flavor Sommelier
+                  AI Shopping Assistant
                 </p>
                 <p className="text-[12px] text-purple-200 mt-0.5 leading-tight">Powered by VapePass</p>
                 {(config?.regionLabel || config?.legalAge) && (
@@ -702,7 +671,6 @@ export default function LandingChatWidget() {
                 sending={sending}
                 legalAge={legalAge}
                 showAgeActions={showAgeGate}
-                onOptionSelect={handleOptionSelect}
                 onAgeYes={handleAgeYes}
                 onAgeNo={handleAgeNo}
               />
@@ -716,7 +684,7 @@ export default function LandingChatWidget() {
               <p className="px-4 py-2 text-[11px] text-[#9ca3af] border-t border-[#f3f4f6] bg-white flex-shrink-0">
                 {locked
                   ? 'Conversation locked'
-                  : `Recommendations from ${config?.storeName || 'store'} inventory only`}
+                  : `Shopping from ${config?.storeName || 'store'} inventory only`}
               </p>
               <form
                 onSubmit={handleSend}
@@ -726,7 +694,9 @@ export default function LandingChatWidget() {
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder={locked ? 'Conversation ended' : 'Type a message…'}
+                  placeholder={
+                    locked ? 'Conversation ended' : "Tell me what you're looking for…"
+                  }
                   disabled={locked || sending || loading || Boolean(error) || !sessionKey}
                   maxLength={2000}
                   className="chat-widget-input flex-1 h-11 px-4 text-[13px] text-[#1f2937] placeholder:text-[#9ca3af] disabled:bg-[#f9fafb] disabled:text-[#9ca3af]"
@@ -751,7 +721,7 @@ export default function LandingChatWidget() {
         type="button"
         onClick={() => (open ? handleClose() : handleOpen())}
         className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full chat-widget-header hero-fab flex items-center justify-center text-white transition-all duration-200 hover:scale-105 hover:brightness-110 active:scale-100"
-        aria-label={open ? 'Close AI Flavor Sommelier' : 'Open AI Flavor Sommelier'}
+        aria-label={open ? 'Close AI Shopping Assistant' : 'Open AI Shopping Assistant'}
         aria-expanded={open}
       >
         {open ? <X size={22} aria-hidden="true" /> : <Sparkles size={22} aria-hidden="true" />}
