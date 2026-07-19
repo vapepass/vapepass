@@ -3,10 +3,38 @@ import { NICOTINE_DISCLAIMER } from '@/lib/chat/conversation-flow';
 import {
   resolveRecommendationDisplay,
   summarizeProductBlurb,
-  summarizeRecommendationIntro,
 } from '@/lib/chat/product-display';
+import { buildMatchReasons } from '@/lib/chat/nlu';
 
-export default function ProductRecommendationCard({ product, intro, disclaimer }) {
+function Section({ title, children }) {
+  if (!children) return null;
+  return (
+    <div className="chat-rec-section">
+      <p className="chat-rec-section-title">{title}</p>
+      <div className="chat-rec-section-body">{children}</div>
+    </div>
+  );
+}
+
+function BulletList({ items }) {
+  if (!items?.length) return null;
+  return (
+    <ul className="chat-rec-bullets">
+      {items.map((item) => (
+        <li key={item}>{item}</li>
+      ))}
+    </ul>
+  );
+}
+
+export default function ProductRecommendationCard({
+  product,
+  intro,
+  disclaimer,
+  lookingFor = [],
+  variants = [],
+  matchIntent = null,
+}) {
   const productUrl =
     (typeof product?.productUrl === 'string' && product.productUrl.trim()) ||
     (typeof product?.originalProductUrl === 'string' && product.originalProductUrl.trim()) ||
@@ -14,20 +42,26 @@ export default function ProductRecommendationCard({ product, intro, disclaimer }
 
   const { title, variant } = resolveRecommendationDisplay(product);
   const blurb = summarizeProductBlurb(product.description);
-  const introText = summarizeRecommendationIntro(intro);
+  const reasons = buildMatchReasons(product, matchIntent, intro);
+  const lookingItems = Array.isArray(lookingFor) ? lookingFor.filter(Boolean) : [];
+  const variantItems = [
+    ...new Set(
+      [
+        ...(Array.isArray(variants) ? variants : []),
+        variant,
+      ]
+        .map((v) => String(v || '').trim())
+        .filter(Boolean)
+    ),
+  ];
 
   return (
     <div className="flex justify-start animate-fade-in">
       <div className="chat-widget-product-card w-full max-w-[94%]">
-        {introText && (
-          <div className="chat-widget-bubble-bot mb-3 px-4 py-3.5 text-[13px] leading-[1.6] text-[#374151]">
-            {introText}
-          </div>
-        )}
         <div className="overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
           <div className="bg-gradient-to-br from-brand-50 via-white to-[#faf9ff] px-4 pt-4 pb-3">
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-600">
-              Recommended for you
+              Recommended Product
             </p>
             <div className="flex items-start gap-3.5">
               {product.imageUrl ? (
@@ -46,12 +80,6 @@ export default function ProductRecommendationCard({ product, intro, disclaimer }
                 <h4 className="text-[15px] font-semibold leading-snug tracking-[-0.01em] text-[#111827]">
                   {title}
                 </h4>
-                {variant && (
-                  <p className="chat-widget-variant mt-1.5">
-                    <span className="chat-widget-variant-label">Variant</span>
-                    <span className="chat-widget-variant-name">{variant}</span>
-                  </p>
-                )}
                 {product.brand && (
                   <p className="mt-1 text-[12px] font-medium text-[#6b7280]">{product.brand}</p>
                 )}
@@ -59,25 +87,46 @@ export default function ProductRecommendationCard({ product, intro, disclaimer }
             </div>
           </div>
 
-          {blurb && (
-            <p className="border-t border-[#f3f4f6] px-4 py-3 text-[13px] leading-relaxed text-[#4b5563]">
-              {blurb}
-            </p>
-          )}
+          <div className="divide-y divide-[#f3f4f6]">
+            {lookingItems.length > 0 && (
+              <Section title="Looking For">
+                <BulletList items={lookingItems} />
+              </Section>
+            )}
 
-          {productUrl ? (
-            <div className="border-t border-[#f3f4f6] p-3">
-              <a
-                href={productUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="chat-widget-view-product inline-flex h-11 w-full items-center justify-center gap-2 px-4 text-[13px] font-semibold text-white no-underline"
-              >
-                <ExternalLink size={14} aria-hidden="true" />
-                View Product
-              </a>
-            </div>
-          ) : null}
+            {reasons.length > 0 && (
+              <Section title="Why This Matches">
+                <BulletList items={reasons} />
+              </Section>
+            )}
+
+            {variantItems.length > 0 && (
+              <Section title="Available Variants">
+                <BulletList items={variantItems} />
+              </Section>
+            )}
+
+            {blurb && (
+              <Section title="About">
+                <p className="text-[13px] leading-relaxed text-[#4b5563]">{blurb}</p>
+              </Section>
+            )}
+
+            {productUrl ? (
+              <div className="p-3">
+                <p className="chat-rec-section-title mb-2 px-1">Product Link</p>
+                <a
+                  href={productUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="chat-widget-view-product inline-flex h-11 w-full items-center justify-center gap-2 px-4 text-[13px] font-semibold text-white no-underline"
+                >
+                  <ExternalLink size={14} aria-hidden="true" />
+                  View Product →
+                </a>
+              </div>
+            ) : null}
+          </div>
         </div>
         <p className="chat-widget-disclaimer mt-3 text-[11px] leading-relaxed">
           {disclaimer || NICOTINE_DISCLAIMER}

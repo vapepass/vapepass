@@ -84,6 +84,9 @@ export default function ChatMessageList({
               intro={item.intro}
               product={item.product}
               disclaimer={item.disclaimer}
+              lookingFor={item.lookingFor}
+              variants={item.variants}
+              matchIntent={item.matchIntent}
             />
           );
         }

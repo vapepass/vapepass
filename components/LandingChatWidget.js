@@ -18,6 +18,14 @@ import {
   stripInteractiveOptions,
   rewriteBrandQuestion,
 } from '@/lib/chat/conversation-flow';
+import {
+  extractIntent,
+  matchOptionWithNlu,
+  buildEnrichedSearchMessage,
+  formatLookingForBullets,
+} from '@/lib/chat/nlu';
+import TypingIndicator from '@/components/chat/TypingIndicator';
+import ChatMessageList from '@/components/chat/ChatMessageList';
 
 /** Prefer API reply text; if missing, turn option labels into a soft conversational prompt (no chips). */
 function replyTextFromSession(session) {
@@ -27,43 +35,27 @@ function replyTextFromSession(session) {
     .map((o) => o.label)
     .filter(Boolean);
   if (!labels.length) return '';
-  // Never surface brand-looking option lists as the main question
   const preview = labels.slice(0, 6).join(', ');
   const more = labels.length > 6 ? ', and more' : '';
   return `Happy to help narrow it down. People often look for things like ${preview}${more}. What sounds closest to what you want?`;
 }
 
-/**
- * Map free-text to a backend option id when the user clearly means a funnel choice.
- * UI stays text-only; payload may use ::option::id for reliable matching.
- */
-function matchOptionFromText(text, options = []) {
-  const t = String(text || '').trim().toLowerCase();
-  if (!t || !Array.isArray(options) || !options.length) return null;
-
-  const exact = options.find((o) => {
-    const label = String(o.label || '').toLowerCase();
-    const value = String(o.value || '').toLowerCase();
-    return t === label || t === value || t === String(o.id).toLowerCase();
-  });
-  if (exact) return exact;
-
-  const scored = options
-    .map((o) => {
-      const label = String(o.label || '').toLowerCase();
-      if (!label || label.length < 3) return null;
-      if (t.includes(label) || label.includes(t)) {
-        return { option: o, score: label.length };
-      }
-      return null;
-    })
-    .filter(Boolean)
-    .sort((a, b) => b.score - a.score);
-
-  return scored[0]?.option || null;
+/** Break long assistant paragraphs into shorter scan-friendly lines. */
+function formatReadableAssistantReply(text) {
+  const raw = rewriteBrandQuestion(text);
+  if (!raw) return '';
+  // Keep intentional newlines; also split dense sentences into shorter blocks.
+  const chunks = raw
+    .split(/\n+/)
+    .flatMap((block) => {
+      const trimmed = block.trim();
+      if (!trimmed) return [''];
+      if (trimmed.length < 120) return [trimmed];
+      const sentences = trimmed.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [trimmed];
+      return sentences.map((s) => s.trim()).filter(Boolean);
+    });
+  return chunks.join('\n\n').trim();
 }
-import TypingIndicator from '@/components/chat/TypingIndicator';
-import ChatMessageList from '@/components/chat/ChatMessageList';
 
 const SESSION_KEY_PREFIX = 'vapepass_landing_session_';
 const GUIDED_KEY_PREFIX = 'vapepass_guided_state_';
@@ -136,6 +128,9 @@ export default function LandingChatWidget() {
   const bootstrappedRef = useRef(false);
   /** Last options from API — used only to map free text → ::option::id; never rendered as chips. */
   const lastApiOptionsRef = useRef([]);
+  /** Accumulated preference intent for structured recommendation cards. */
+  const preferenceIntentRef = useRef(null);
+  const preferenceMessagesRef = useRef([]);
 
   const storageKey = storeId ? `${SESSION_KEY_PREFIX}${storeId}` : null;
   const guidedKey = storeId ? `${GUIDED_KEY_PREFIX}${storeId}` : null;
@@ -180,8 +175,9 @@ export default function LandingChatWidget() {
   const applyGuidedReply = useCallback(
     (session, { appendAssistantText = true, prependMessages = [] } = {}) => {
       const replyType = session.replyType || 'text';
-      const reply = replyTextFromSession(session);
-      lastApiOptionsRef.current = normalizeOptions(session.options);
+      const reply = formatReadableAssistantReply(replyTextFromSession(session));
+      const optionList = normalizeOptions(session.options);
+      lastApiOptionsRef.current = optionList;
 
       // Text-first UX: never attach selectable option chips after age verification.
       // Backend may still return options for funnel logic; we only show conversational text + product cards.
@@ -189,6 +185,23 @@ export default function LandingChatWidget() {
       if (replyType === 'recommendation' || (Array.isArray(session.products) && session.products.length)) {
         const apiProduct = session.products?.[0];
         const product = productFromApi(apiProduct);
+        const matchIntent = preferenceIntentRef.current;
+        const lookingFor = formatLookingForBullets(
+          matchIntent,
+          preferenceMessagesRef.current
+        );
+        const variants = [
+          ...new Set(
+            [
+              ...optionList.map((o) => o.label),
+              ...(Array.isArray(session.products)
+                ? session.products
+                    .map((p) => p.variantName || p.flavor)
+                    .filter(Boolean)
+                : []),
+            ].filter(Boolean)
+          ),
+        ].slice(0, 12);
 
         setTimeline((prev) => {
           const cleared = [
@@ -204,6 +217,9 @@ export default function LandingChatWidget() {
               intro: reply,
               product,
               disclaimer: null,
+              lookingFor,
+              variants,
+              matchIntent,
             });
             items.push({
               id: nextId(),
@@ -362,8 +378,29 @@ export default function LandingChatWidget() {
       }
 
       // Keep chat bubbles natural; map clear preferences to option ids when possible.
-      const matched = matchOptionFromText(trimmed, lastApiOptionsRef.current);
-      const outbound = matched ? `::option::${matched.id}` : trimmed;
+      const intent = extractIntent(trimmed);
+      preferenceMessagesRef.current = [...preferenceMessagesRef.current, trimmed].slice(-12);
+      const prevIntent = preferenceIntentRef.current;
+      preferenceIntentRef.current = {
+        ...intent,
+        lookingFor: [
+          ...new Set([...(prevIntent?.lookingFor || []), ...(intent.lookingFor || [])]),
+        ].slice(0, 10),
+        excludes: [
+          ...new Set([...(prevIntent?.excludes || []), ...(intent.excludes || [])]),
+        ],
+        productType: intent.productType || prevIntent?.productType || null,
+        flavor: intent.flavor || prevIntent?.flavor || null,
+        category: intent.category || prevIntent?.category || null,
+        cooling: intent.cooling || prevIntent?.cooling || null,
+        sweetness: intent.sweetness || prevIntent?.sweetness || null,
+      };
+
+      const nluHit = matchOptionWithNlu(trimmed, lastApiOptionsRef.current);
+      const matched = nluHit?.option || null;
+      const outbound = matched
+        ? `::option::${matched.id}`
+        : buildEnrichedSearchMessage(trimmed, preferenceIntentRef.current);
 
       try {
         const session = await sendAssistantMessage(storeId, sessionKey, outbound);
@@ -408,6 +445,8 @@ export default function LandingChatWidget() {
   const ageYesLabel = config?.ageYesLabel ?? getAgeYesLabel(legalAge);
 
   const handleAgeYes = async () => {
+    preferenceIntentRef.current = null;
+    preferenceMessagesRef.current = [];
     setTimeline((prev) => [
       ...deactivateInteractiveActions(prev),
       {
@@ -489,6 +528,7 @@ export default function LandingChatWidget() {
 
   const handleAnotherRecommendation = async () => {
     setRecommendedProduct(null);
+    // Keep preference memory so "another" still respects prior taste signals.
     setCurrentOptions([]);
     setTimeline((prev) => [
       ...deactivateInteractiveActions(prev),
