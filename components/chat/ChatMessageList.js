@@ -1,13 +1,17 @@
 import ChatBubble from './ChatBubble';
 import ProductRecommendationCard from './ProductRecommendationCard';
 import WelcomeBubble from './WelcomeBubble';
+import { stripEmojis } from '@/lib/chat/icon-map';
 
 function TextTimelineItem({ item, legalAge }) {
   if (item.kind === 'welcome') return <WelcomeBubble legalAge={legalAge} />;
 
+  const content = stripEmojis(item.content || '');
+  if (!content) return null;
+
   return (
     <ChatBubble role={item.role} variant={item.variant}>
-      {item.content.split('\n').map((line, i) => (
+      {content.split('\n').map((line, i) => (
         <p key={i} className={i > 0 ? 'mt-2' : ''}>
           {line}
         </p>

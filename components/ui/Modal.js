@@ -3,8 +3,9 @@ import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import Button from './Button';
 
-export default function Modal({ open, onClose, title, description, children, size = 'md' }) {
+export default function Modal({ open, onClose, title, description, children, size = 'md', contentClassName = '' }) {
   const overlayRef = useRef(null);
+  const hasHeaderCopy = Boolean(title || description);
 
   useEffect(() => {
     if (!open) return;
@@ -26,7 +27,21 @@ export default function Modal({ open, onClose, title, description, children, siz
     md: 'max-w-md',
     lg: 'max-w-lg',
     xl: 'max-w-xl',
+    '2xl': 'max-w-2xl',
+    '3xl': 'max-w-3xl',
   };
+
+  const closeButton = onClose ? (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={onClose}
+      aria-label="Close dialog"
+      className="min-h-9 h-9 w-9"
+    >
+      <X size={18} />
+    </Button>
+  ) : null;
 
   return (
     <div
@@ -46,7 +61,7 @@ export default function Modal({ open, onClose, title, description, children, siz
         ].join(' ')}
         onClick={(e) => e.stopPropagation()}
       >
-        {(title || onClose) && (
+        {hasHeaderCopy ? (
           <div className="flex items-start justify-between gap-4 p-6 pb-0">
             <div>
               {title && (
@@ -58,20 +73,14 @@ export default function Modal({ open, onClose, title, description, children, siz
                 <p className="text-sm text-body mt-1">{description}</p>
               )}
             </div>
-            {onClose && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onClose}
-                aria-label="Close dialog"
-                className="min-h-9 h-9 w-9 -mr-2 -mt-1"
-              >
-                <X size={18} />
-              </Button>
-            )}
+            {closeButton && <div className="-mr-2 -mt-1">{closeButton}</div>}
           </div>
+        ) : (
+          closeButton && (
+            <div className="absolute right-3 top-3 z-10">{closeButton}</div>
+          )
         )}
-        <div className="p-6">{children}</div>
+        <div className={['p-6', contentClassName].filter(Boolean).join(' ')}>{children}</div>
       </div>
     </div>
   );

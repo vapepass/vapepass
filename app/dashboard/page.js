@@ -17,6 +17,7 @@ import {
   getSubscriptionBadgeVariant,
   getSubscriptionStatusLabel,
 } from '@/lib/subscription';
+import WelcomeOnboarding from '@/components/onboarding/WelcomeOnboarding';
 
 function statusVariant(status) {
   switch (status) {
@@ -113,6 +114,8 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
+      <WelcomeOnboarding />
+
       <PageHeader
         title="Dashboard"
         description={

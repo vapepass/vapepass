@@ -38,7 +38,7 @@ function StorefrontChatCard() {
         <div className="flex justify-start">
           <div className="max-w-[88%] rounded-2xl rounded-bl-md bg-[#f3f4f6] px-4 py-3">
             <p className="text-[#374151] text-[13px] sm:text-sm leading-relaxed">
-              Hi! I&apos;m your VapePass Flavor Sommelier. What flavors are you into? 🍇
+              Hi! I&apos;m your VapePass Flavor Sommelier. What flavors are you into?
             </p>
           </div>
         </div>
@@ -54,7 +54,7 @@ function StorefrontChatCard() {
         <div className="flex justify-start">
           <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-[#f3f4f6] px-4 py-3">
             <p className="text-[#374151] text-[13px] sm:text-sm leading-relaxed">
-              Perfect — you&apos;d love Passion Fruit Iced or Guava Frost. Both are in stock right now. 🍉🧊
+              Perfect — you&apos;d love Passion Fruit Iced or Guava Frost. Both are in stock right now.
             </p>
           </div>
         </div>

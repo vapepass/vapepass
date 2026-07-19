@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Building2, Gift, Settings, LogOut } from 'lucide-react';
+import { LayoutDashboard, Building2, Gift, Settings, LogOut, Handshake } from 'lucide-react';
 import Logo from '@/components/Logo';
 import AdminGuard from '@/components/AdminGuard';
 import { useAuth } from '@/context/AuthContext';
@@ -10,6 +10,7 @@ import { useAuth } from '@/context/AuthContext';
 const nav = [
   { href: '/admin', label: 'Overview', icon: LayoutDashboard },
   { href: '/admin/businesses', label: 'Businesses', icon: Building2 },
+  { href: '/admin/setup-requests', label: 'Free Setup', icon: Handshake },
   { href: '/admin/programs', label: 'Programs', icon: Gift },
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ];
@@ -33,7 +34,7 @@ export default function AdminPanelLayout({ children }) {
           </div>
           <nav className="flex-1 px-3 py-3 space-y-1" aria-label="Admin navigation">
             {nav.map(({ href, label, icon: Icon }) => {
-              const active = path === href;
+              const active = href === '/admin' ? path === href : path === href || path.startsWith(`${href}/`);
               return (
                 <Link
                   key={href}

@@ -1,4 +1,4 @@
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Sparkles } from 'lucide-react';
 import { NICOTINE_DISCLAIMER } from '@/lib/chat/conversation-flow';
 import {
   resolveRecommendationDisplay,
@@ -35,8 +35,8 @@ export default function ProductRecommendationCard({ product, intro, disclaimer }
                 className="w-12 h-12 rounded-xl object-cover flex-shrink-0 bg-[#f3e8ff]"
               />
             ) : (
-              <div className="w-10 h-10 rounded-xl bg-[#f3e8ff] flex items-center justify-center flex-shrink-0 text-lg">
-                ✨
+              <div className="w-10 h-10 rounded-xl bg-[#f3e8ff] flex items-center justify-center flex-shrink-0 text-brand-600">
+                <Sparkles size={18} aria-hidden="true" />
               </div>
             )}
             <div className="min-w-0 flex-1">

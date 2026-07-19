@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VapePass Integration Handover</title>
+  <meta name="description" content="Developer handover guide for installing the VapePass AI Assistant chatbot on a store website." />
+  <style>
+    :root {
+      --ink: #0c0c12;
+      --body: #5c5c6d;
+      --muted: #9494a6;
+      --canvas: #f6f7fb;
+      --surface: #ffffff;
+      --line: #e8e8ef;
+      --brand: #7c3aed;
+      --brand-dark: #6d28d9;
+      --brand-soft: #f5f3ff;
+      --success: #059669;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      color: var(--ink);
+      background: var(--canvas);
+      line-height: 1.6;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 50%, #6d28d9 100%);
+      color: #fff;
+      padding: 48px 24px 56px;
+    }
+
+    .hero-inner,
+    .content {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+
+    .eyebrow {
+      font-size: 12px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      opacity: 0.8;
+      font-weight: 600;
+      margin: 0 0 10px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.75rem, 4vw, 2.35rem);
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+    }
+
+    .hero p {
+      margin: 14px 0 0;
+      max-width: 540px;
+      opacity: 0.92;
+      font-size: 1.05rem;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .content {
+      padding: 36px 24px 64px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 18px;
+      box-shadow: 0 1px 2px rgba(12, 12, 18, 0.04);
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 1.2rem;
+      letter-spacing: -0.015em;
+    }
+
+    h3 {
+      margin: 20px 0 8px;
+      font-size: 1rem;
+    }
+
+    p, li {
+      color: var(--body);
+      font-size: 0.975rem;
+    }
+
+    ol, ul {
+      padding-left: 1.25rem;
+      margin: 8px 0 0;
+    }
+
+    li + li { margin-top: 6px; }
+
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    pre {
+      margin: 14px 0 0;
+      background: var(--ink);
+      color: #f8f8ff;
+      border-radius: 12px;
+      padding: 16px 18px;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      line-height: 1.55;
+    }
+
+    .note {
+      background: var(--brand-soft);
+      border: 1px solid #ddd6fe;
+      border-radius: 12px;
+      padding: 14px 16px;
+      color: var(--brand-dark);
+      font-size: 0.92rem;
+      margin-top: 14px;
+    }
+
+    .checklist li::marker {
+      color: var(--success);
+    }
+
+    .footer {
+      margin-top: 28px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    @media print {
+      body { background: #fff; }
+      .hero { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .card { box-shadow: none; break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <p class="eyebrow">VapePass · Developer Handover</p>
+      <h1>Integration Guide: Install the VapePass AI Assistant</h1>
+      <p>
+        Share this document with your in-house developer or web agency.
+        It covers everything required to install the VapePass chatbot on your store website.
+      </p>
+      <div class="meta">
+        <span class="chip">Document version 1.0.0</span>
+        <span class="chip">Estimated time: 15–30 minutes</span>
+        <span class="chip">HTML / JS embed</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="content">
+    <section class="card">
+      <h2>1. Overview</h2>
+      <p>
+        VapePass provides an AI Flavor Sommelier chatbot that recommends products from your live
+        inventory. Installation is a single embed script placed on your storefront. The script is
+        domain-locked to your authorized hostname for security.
+      </p>
+      <div class="note">
+        <strong>Prerequisite:</strong> The store owner must complete AI Assistant setup in the
+        VapePass dashboard (connect product page URL, sync inventory, and copy the store-specific
+        embed code) before going live.
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>2. What you need from the store owner</h2>
+      <ul class="checklist">
+        <li>Active VapePass subscription</li>
+        <li>Store-specific embed script from <strong>Dashboard</strong> or <strong>AI Assistant</strong></li>
+        <li>Authorized website domain (hostname must match the account setting)</li>
+        <li>Access to edit the storefront theme / HTML (typically before <code>&lt;/body&gt;</code>)</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>3. Installation steps</h2>
+      <ol>
+        <li>Log in to the VapePass dashboard as the store owner.</li>
+        <li>Open <strong>AI Assistant</strong> and confirm the product page URL is connected and inventory sync status is successful.</li>
+        <li>Copy the embed script from the Dashboard or AI Assistant page.</li>
+        <li>Paste the script into your website template immediately before the closing <code>&lt;/body&gt;</code> tag on pages where the assistant should appear (usually all storefront pages).</li>
+        <li>Publish / deploy the theme changes.</li>
+        <li>Open the live website and verify the chat widget loads on the authorized domain.</li>
+        <li>In VapePass, use <strong>Finish Setup / Go Live</strong> if the assistant is not yet marked live.</li>
+      </ol>
+
+      <h3>Embed snippet (shape)</h3>
+      <p>
+        Your production snippet is store-specific. It will look similar to:
+      </p>
+      <pre>&lt;script
+  src="https://YOUR_API_HOST/widget.js"
+  data-store-id="YOUR_STORE_ID"
+  async
+&gt;&lt;/script&gt;</pre>
+      <div class="note">
+        Always use the exact script from the customer&rsquo;s VapePass dashboard.
+        Do not invent or reuse another store&rsquo;s <code>data-store-id</code>.
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>4. Platform tips</h2>
+      <h3>Shopify</h3>
+      <ul>
+        <li>Online Store → Themes → Edit code → <code>theme.liquid</code> (or relevant layout)</li>
+        <li>Paste the script before <code>&lt;/body&gt;</code></li>
+        <li>Save and preview on the live domain</li>
+      </ul>
+      <h3>WordPress / WooCommerce</h3>
+      <ul>
+        <li>Appearance → Theme File Editor → footer template, or use a “Header/Footer Scripts” plugin</li>
+        <li>Paste before <code>&lt;/body&gt;</code> and clear caches</li>
+      </ul>
+      <h3>Custom / headless storefronts</h3>
+      <ul>
+        <li>Add the script in the root HTML layout used for customer-facing pages</li>
+        <li>Ensure it is not stripped by CSP without allowing the VapePass script origin</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>5. Domain &amp; security notes</h2>
+      <ul>
+        <li>The widget only works on the store&rsquo;s authorized hostname.</li>
+        <li>If the site uses www vs non-www, confirm the hostname matches dashboard settings.</li>
+        <li>Optional age-gate integration: set <code>data-require-site-age=&quot;true&quot;</code> on the script and ensure your site sets <code>localStorage.vapepass_site_age_verified = &quot;true&quot;</code> (or <code>age_verified</code>) after age verification.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>6. Verification checklist</h2>
+      <ul class="checklist">
+        <li>Widget appears on desktop and mobile</li>
+        <li>Chat opens and returns product recommendations</li>
+        <li>Inventory in dashboard matches storefront catalog expectations</li>
+        <li>Assistant status in VapePass shows as live</li>
+        <li>Widget does not load on unauthorized domains</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>7. Troubleshooting</h2>
+      <ul>
+        <li><strong>Widget missing:</strong> Confirm script placement, publish status, and ad/script blockers.</li>
+        <li><strong>Wrong domain error:</strong> Update authorized hostname in VapePass settings / assistant setup.</li>
+        <li><strong>No recommendations:</strong> Re-run inventory sync and confirm recommendable products exist.</li>
+        <li><strong>Cached theme:</strong> Hard-refresh or purge CDN / Shopify cache after deploy.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>8. Need help?</h2>
+      <p>
+        Store owners can request free setup assistance from the VapePass dashboard welcome flow.
+        Your team can also ask the store owner to share dashboard access or a staging URL for a
+        joint install session during business hours.
+      </p>
+    </section>
+
+    <p class="footer">
+      VapePass Integration Handover · Version 1.0.0 ·
+      Update this file in <code>frontend/public/docs/</code> when installation steps change.
+      Print or save as PDF from the browser if a PDF copy is required.
+    </p>
+  </main>
+</body>
+</html>

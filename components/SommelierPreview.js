@@ -49,7 +49,7 @@ export default function SommelierPreview() {
           <div className="flex justify-start">
             <div className="max-w-[90%] rounded-xl hero-chat-bubble-ai px-3.5 py-2.5 sm:px-4 sm:py-3">
               <p className="text-[12.5px] sm:text-[13px] leading-[1.5] font-normal">
-                Try our Mango Lychee Frost or Watermelon Ice — both are in stock and match that palate perfectly. 🍉 🧊
+                Try our Mango Lychee Frost or Watermelon Ice — both are in stock and match that palate perfectly.
               </p>
             </div>
           </div>
