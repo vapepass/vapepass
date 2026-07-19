@@ -7,6 +7,7 @@ import AuthGuard from '@/components/AuthGuard';
 import AuthLayout from '@/components/AuthLayout';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
+import Spinner from '@/components/ui/Spinner';
 import { useAuth } from '@/context/AuthContext';
 import {
   createCheckoutSession,
@@ -24,7 +25,7 @@ import { ApiError } from '@/lib/api';
 export default function SubscribePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { store, user, refreshStore, logout } = useAuth();
+  const { store, user, refreshStore, logout, storeLoading, storeError } = useAuth();
   const [billingInfo, setBillingInfo] = useState(null);
   const [loading, setLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -34,9 +35,10 @@ export default function SubscribePage() {
 
   const status = store?.subscriptionStatus;
   const active = isSubscriptionActive(status);
-  const hasDashboardAccess = canAccessDashboard(status);
+  const hasDashboardAccess = Boolean(store) && canAccessDashboard(status);
   const billingFlag = searchParams.get('billing');
   const sessionId = searchParams.get('session_id');
+  const checkingStatus = storeLoading || (!store && !storeError);
 
   useEffect(() => {
     getBillingInfo()
@@ -142,6 +144,55 @@ export default function SubscribePage() {
   };
 
   const price = billingInfo?.monthlyPrice ?? 99;
+
+  if (checkingStatus) {
+    return (
+      <AuthGuard>
+        <div className="min-h-screen flex flex-col items-center justify-center gap-3 gradient-mesh px-4">
+          <Spinner size="lg" />
+          <p className="text-sm text-[#6b7280]">Checking subscription status…</p>
+        </div>
+      </AuthGuard>
+    );
+  }
+
+  if (storeError && !store) {
+    return (
+      <AuthGuard>
+        <AuthLayout
+          title="Unable to verify subscription"
+          subtitle="We could not load your billing status from the server"
+          footer={
+            <button
+              type="button"
+              onClick={() => logout('/login')}
+              className="text-sm font-semibold text-brand-600 hover:text-brand-700"
+            >
+              Sign out
+            </button>
+          }
+        >
+          <div className="space-y-4">
+            <p
+              className="text-sm text-danger-600 bg-danger-50 border border-red-200 rounded-xl px-4 py-3 flex items-start gap-2"
+              role="alert"
+            >
+              <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+              {storeError}
+            </p>
+            <Button
+              className="w-full"
+              onClick={() => {
+                refreshStore().catch(() => {});
+              }}
+            >
+              Retry
+            </Button>
+          </div>
+        </AuthLayout>
+      </AuthGuard>
+    );
+  }
 
   return (
     <AuthGuard>

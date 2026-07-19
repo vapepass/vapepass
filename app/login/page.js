@@ -43,7 +43,16 @@ export default function Login() {
         return;
       }
 
+      // Route only after subscription status was loaded from the backend/DB
       const status = data.store?.subscriptionStatus;
+      if (!data.store || status == null) {
+        setErrors({
+          _form:
+            'Signed in, but subscription status could not be verified. Please try again.',
+        });
+        return;
+      }
+
       router.replace(canAccessDashboard(status) ? '/dashboard' : '/subscribe');
     } catch (err) {
       if (err instanceof ApiError) {
@@ -51,7 +60,11 @@ export default function Login() {
         if (Object.keys(fieldErrors).length) setErrors(fieldErrors);
         else setErrors({ _form: err.message });
       } else {
-        setErrors({ _form: 'Unable to sign in. Please try again.' });
+        setErrors({
+          _form:
+            err?.message ||
+            'Unable to sign in or verify subscription. Please try again.',
+        });
       }
     } finally {
       setLoading(false);

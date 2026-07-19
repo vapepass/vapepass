@@ -8,43 +8,88 @@ import * as storeApi from '@/lib/store-api';
 
 const AuthContext = createContext(null);
 
+function isStoreDocument(value) {
+  return (
+    Boolean(value) &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    value.subscriptionStatus != null
+  );
+}
+
 export function AuthProvider({ children }) {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [store, setStore] = useState(null);
   const [loading, setLoading] = useState(true);
+  /** True while a store-owner session exists but store/subscription has not been resolved yet */
+  const [storeLoading, setStoreLoading] = useState(false);
+  /** Set when store/subscription fetch fails — do not treat as inactive */
+  const [storeError, setStoreError] = useState(null);
+
+  const resolveStoreForUser = useCallback(async (profile, preferredStore = null) => {
+    if (!profile || profile.role === 'admin') {
+      return null;
+    }
+
+    // Always prefer GET /store so subscriptionStatus comes from the database.
+    try {
+      return await storeApi.getStore();
+    } catch (err) {
+      if (isStoreDocument(preferredStore)) {
+        return preferredStore;
+      }
+      if (isStoreDocument(profile.storeId)) {
+        return profile.storeId;
+      }
+      throw err;
+    }
+  }, []);
 
   const loadSession = useCallback(async () => {
     const token = getToken();
     if (!token) {
       setUser(null);
       setStore(null);
+      setStoreError(null);
+      setStoreLoading(false);
       setLoading(false);
       return;
     }
 
+    setStoreError(null);
     try {
       const profile = await authApi.getProfile();
       setUser(profile);
 
       if (profile.role === 'admin') {
         setStore(null);
+        setStoreLoading(false);
       } else {
-        const storeData = profile.storeId
-          ? typeof profile.storeId === 'object'
-            ? profile.storeId
-            : await storeApi.getStore()
-          : null;
-        setStore(storeData);
+        setStoreLoading(true);
+        try {
+          const storeData = await resolveStoreForUser(profile);
+          setStore(storeData);
+          setStoreError(null);
+        } catch (err) {
+          setStore(null);
+          setStoreError(
+            err?.message || 'Unable to verify subscription status. Please try again.'
+          );
+        } finally {
+          setStoreLoading(false);
+        }
       }
     } catch {
       setToken(null);
       setUser(null);
       setStore(null);
+      setStoreError(null);
+      setStoreLoading(false);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [resolveStoreForUser]);
 
   useEffect(() => {
     loadSession();
@@ -58,20 +103,45 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (email, password) => {
     const data = await authApi.loginUser(email, password);
-    applyAuth(data);
+
+    // Persist token first so subsequent store fetch is authenticated
+    if (data.accessToken) setToken(data.accessToken);
+
     let storeData = null;
+    setStoreError(null);
+
     if (data.user?.role !== 'admin') {
-      storeData = await storeApi.getStore();
-      setStore(storeData);
-    } else {
-      setStore(null);
+      setStoreLoading(true);
+      try {
+        storeData = await resolveStoreForUser(data.user, data.store);
+      } catch (err) {
+        setStoreLoading(false);
+        setStoreError(
+          err?.message || 'Unable to verify subscription status. Please try again.'
+        );
+        // Do not leave a half-authenticated session that Guests treat as unpaid
+        setToken(null);
+        setUser(null);
+        setStore(null);
+        throw err;
+      } finally {
+        setStoreLoading(false);
+      }
     }
+
+    // Set user + store together so guards never see auth without subscription status
+    setUser(data.user);
+    setStore(storeData);
+    setStoreError(null);
+
     return { ...data, store: storeData };
-  }, [applyAuth]);
+  }, [resolveStoreForUser]);
 
   const register = useCallback(async (payload) => {
     const data = await authApi.registerUser(payload);
     applyAuth(data);
+    setStoreError(null);
+    setStoreLoading(false);
     return data;
   }, [applyAuth]);
 
@@ -87,13 +157,26 @@ export function AuthProvider({ children }) {
     setToken(null);
     setUser(null);
     setStore(null);
+    setStoreError(null);
+    setStoreLoading(false);
     router.push(destination);
   }, [router, user]);
 
   const refreshStore = useCallback(async () => {
-    const storeData = await storeApi.getStore();
-    setStore(storeData);
-    return storeData;
+    setStoreLoading(true);
+    setStoreError(null);
+    try {
+      const storeData = await storeApi.getStore();
+      setStore(storeData);
+      return storeData;
+    } catch (err) {
+      setStoreError(
+        err?.message || 'Unable to verify subscription status. Please try again.'
+      );
+      throw err;
+    } finally {
+      setStoreLoading(false);
+    }
   }, []);
 
   const updateStore = useCallback(async (payload, logoFile = null) => {
@@ -113,6 +196,8 @@ export function AuthProvider({ children }) {
       user,
       store,
       loading,
+      storeLoading,
+      storeError,
       isAuthenticated: Boolean(user),
       login,
       register,
@@ -122,7 +207,20 @@ export function AuthProvider({ children }) {
       updateProfile,
       reloadSession: loadSession,
     }),
-    [user, store, loading, login, register, logout, refreshStore, updateStore, updateProfile, loadSession]
+    [
+      user,
+      store,
+      loading,
+      storeLoading,
+      storeError,
+      login,
+      register,
+      logout,
+      refreshStore,
+      updateStore,
+      updateProfile,
+      loadSession,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
