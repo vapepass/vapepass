@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Bot, Copy, CheckCircle, RefreshCw, Link2, Package, AlertTriangle, Code2, Rocket,
+  Bot, Copy, CheckCircle, RefreshCw, Link2, Package, AlertTriangle, Code2, Rocket, Square,
 } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import PageHeader from '@/components/ui/PageHeader';
@@ -24,6 +24,7 @@ import {
   getInventory,
   setPriorityPromotion,
   goLive,
+  stopInventorySync,
 } from '@/lib/assistant-api';
 
 /** Long scrapes (large catalogs + taxonomy) often exceed 30s */
@@ -33,6 +34,7 @@ const POLL_MAX_MS = 15 * 60 * 1000;
 function statusVariant(status) {
   switch (status) {
     case 'success':
+    case 'stopped':
     case 'active':
       return 'success';
     case 'error':
@@ -56,7 +58,7 @@ function formatDate(value) {
 }
 
 function isTerminalSyncStatus(value) {
-  return value === 'success' || value === 'error';
+  return value === 'success' || value === 'error' || value === 'stopped';
 }
 
 function isActiveSyncStatus(value) {
@@ -71,6 +73,7 @@ export default function AssistantPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [copied, setCopied] = useState(false);
   const [togglingId, setTogglingId] = useState(null);
   const [goingLive, setGoingLive] = useState(false);
@@ -139,6 +142,11 @@ export default function AssistantPage() {
               if (assistantStatus.inventorySyncStatus === 'success') {
                 toast(
                   `Inventory synced — ${assistantStatus.inventoryProductCount} products`,
+                  'success'
+                );
+              } else if (assistantStatus.inventorySyncStatus === 'stopped') {
+                toast(
+                  `Scrape stopped — ${assistantStatus.inventoryProductCount} products saved`,
                   'success'
                 );
               } else if (assistantStatus.inventorySyncError) {
@@ -237,6 +245,26 @@ export default function AssistantPage() {
     }
   };
 
+  const forceStopSync = async () => {
+    setStopping(true);
+    try {
+      const data = await stopInventorySync();
+      if (data?.status) {
+        setStatus((prev) => ({ ...(prev || {}), ...data.status }));
+      }
+      toast('Stopping scrape… products already saved will be kept', 'success');
+      await pollUntilSyncComplete({ showToast: true });
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Failed to stop scrape', 'error');
+      await load();
+    } finally {
+      if (mountedRef.current) {
+        setStopping(false);
+        setSyncing(false);
+      }
+    }
+  };
+
   const togglePriority = async (product) => {
     const next = !product.isPriorityPromotion;
     setTogglingId(product._id);
@@ -301,11 +329,13 @@ export default function AssistantPage() {
   const syncBadgeLabel =
     status?.inventorySyncStatus === 'success'
       ? 'Completed'
-      : status?.inventorySyncStatus === 'error'
-        ? 'Failed'
-        : isActiveSyncStatus(status?.inventorySyncStatus)
-          ? 'Scraping…'
-          : status?.inventorySyncStatus || 'idle';
+      : status?.inventorySyncStatus === 'stopped'
+        ? 'Stopped'
+        : status?.inventorySyncStatus === 'error'
+          ? 'Failed'
+          : isActiveSyncStatus(status?.inventorySyncStatus)
+            ? 'Scraping…'
+            : status?.inventorySyncStatus || 'idle';
 
   return (
     <DashboardLayout>
@@ -370,6 +400,17 @@ export default function AssistantPage() {
                   <RefreshCw size={15} className={isSyncing ? 'animate-spin' : ''} />
                   {isSyncing ? 'Refreshing…' : 'Refresh Inventory'}
                 </Button>
+                {isSyncing && (
+                  <Button
+                    type="button"
+                    variant="danger"
+                    onClick={forceStopSync}
+                    disabled={stopping}
+                  >
+                    <Square size={15} />
+                    {stopping ? 'Stopping…' : 'Force Stop'}
+                  </Button>
+                )}
                 {status?.inventoryRefresh?.label && (
                   <p className="text-sm text-muted w-full sm:w-auto">
                     {status.inventoryRefresh.label}
@@ -579,7 +620,10 @@ export default function AssistantPage() {
               {[
                 { ok: Boolean(status?.productPageUrl), label: 'Store website URL submitted' },
                 {
-                  ok: status?.inventorySyncStatus === 'success',
+                  ok:
+                    status?.inventorySyncStatus === 'success' ||
+                    status?.inventorySyncStatus === 'stopped' ||
+                    (status?.inventoryProductCount || 0) > 0,
                   label: 'Inventory scraped to MongoDB',
                 },
                 {
@@ -605,7 +649,13 @@ export default function AssistantPage() {
               <div className="rounded-xl bg-canvas border border-line-subtle px-3 py-3">
                 <p className="text-[11px] text-muted uppercase tracking-wider">Products</p>
                 <p className="text-lg font-bold text-ink tabular-nums">
-                  {status?.inventoryProductCount ?? 0}
+                  {Math.max(
+                    status?.inventoryProductCount ?? 0,
+                    products.filter((p) => p.isActive !== false).length
+                  )}
+                  {isSyncing ? (
+                    <span className="ml-1 text-xs font-medium text-brand-600">live</span>
+                  ) : null}
                 </p>
               </div>
               <div className="rounded-xl bg-canvas border border-line-subtle px-3 py-3">
