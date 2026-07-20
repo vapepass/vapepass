@@ -149,6 +149,11 @@ export default function LandingChatWidget({
     return () => setEmbedParentOrigin(null);
   }, [embedMode, parentOrigin]);
 
+  // Set parent origin synchronously so the first config request includes the header.
+  if (embedMode && typeof window !== 'undefined') {
+    setEmbedParentOrigin(parentOrigin);
+  }
+
   /** Tell the host-page iframe loader how large to size the frame (FAB vs open panel). */
   useEffect(() => {
     if (!embedMode || typeof window === 'undefined') return;
@@ -342,9 +347,14 @@ export default function LandingChatWidget({
 
       if (!widgetConfig.enabled) {
         const reason = widgetConfig.disabledReason;
+        const allowed = widgetConfig.allowedHostname;
         setError(
           reason === 'unauthorized_domain'
-            ? 'This demo chatbot is not authorized for this domain. Set CLIENT_URL on the API to your Vercel URL (e.g. https://projectclient-zeta.vercel.app).'
+            ? embedMode
+              ? allowed
+                ? `This chatbot is only authorized for ${allowed}. Your test page must use that domain, or localhost / 127.0.0.1 for local testing. Update the store website URL in VapePass Settings if needed.`
+                : 'This chatbot is not authorized for this website. Set the store website URL in VapePass Settings to match the domain where the embed script is pasted.'
+              : 'This demo chatbot is not authorized for this domain. Set CLIENT_URL on the API to your Vercel URL (e.g. https://projectclient-zeta.vercel.app).'
             : reason === 'no_inventory'
               ? 'No recommendable products are available yet. Sync store inventory in the dashboard.'
               : 'Assistant is not live for this store yet. Complete setup, sync inventory, and ensure your subscription is active.'
@@ -404,7 +414,7 @@ export default function LandingChatWidget({
       bootstrappedRef.current = true;
       setLoading(false);
     }
-  }, [storeId, storageKey, guidedKey, applySession]);
+  }, [storeId, storageKey, guidedKey, applySession, embedMode]);
 
   useEffect(() => {
     if (open && !bootstrappedRef.current && !loading) {
