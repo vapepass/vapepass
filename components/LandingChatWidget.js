@@ -14,6 +14,9 @@ import {
   getAgeYesLabel,
   getShoppingWelcomeMessage,
   detectsRecommendationRestart,
+  detectsRecommendationRefine,
+  detectsNewRecommendationPass,
+  detectsConversationEnd,
   normalizeOptions,
   stripInteractiveOptions,
   rewriteBrandQuestion,
@@ -164,6 +167,11 @@ export default function LandingChatWidget() {
       setAgeVerified(Boolean(session.ageVerified));
       setLocked(Boolean(session.locked));
 
+      if (session.recommendationRestart) {
+        preferenceIntentRef.current = null;
+        preferenceMessagesRef.current = [];
+      }
+
       if (session.locked) {
         setFlowStep(FLOW_STEPS.LOCKED);
         setCurrentOptions([]);
@@ -182,8 +190,15 @@ export default function LandingChatWidget() {
       // Text-first UX: never attach selectable option chips after age verification.
       // Backend may still return options for funnel logic; we only show conversational text + product cards.
 
-      if (replyType === 'recommendation' || (Array.isArray(session.products) && session.products.length)) {
-        const apiProduct = session.products?.[0];
+      const hasProductCard =
+        !session.recommendationRestart &&
+        !session.conversationEnded &&
+        (replyType === 'recommendation' ||
+          (Array.isArray(session.products) && session.products.length > 0)) &&
+        Boolean(session.products?.[0]);
+
+      if (hasProductCard) {
+        const apiProduct = session.products[0];
         const product = productFromApi(apiProduct);
         const matchIntent = preferenceIntentRef.current;
         const lookingFor = formatLookingForBullets(
@@ -269,7 +284,11 @@ export default function LandingChatWidget() {
         ];
       });
       setCurrentOptions([]);
-      setRecommendedProduct(null);
+      if (session.recommendationRestart) {
+        setRecommendedProduct(null);
+      } else {
+        setRecommendedProduct(null);
+      }
       setFlowStep(session.locked ? FLOW_STEPS.LOCKED : FLOW_STEPS.FREE_CHAT);
     },
     []
@@ -384,13 +403,45 @@ export default function LandingChatWidget() {
         });
       }
 
-      // Keep chat bubbles natural; map clear preferences to option ids when possible.
       const intent = extractIntent(trimmed);
       const nluHit = matchOptionWithNlu(trimmed, lastApiOptionsRef.current);
+      const prevIntent = preferenceIntentRef.current;
+      const isClosing = detectsConversationEnd(trimmed);
 
-      if (nluHit || intent.lookingFor?.length) {
+      // Never enrich or accumulate prefs for polite closings — send plain text only
+      if (isClosing) {
+        preferenceIntentRef.current = null;
+        preferenceMessagesRef.current = [];
+      }
+
+      const productTypeSwitched = Boolean(
+        !isClosing &&
+          intent.productType &&
+          prevIntent?.productType &&
+          intent.productType !== prevIntent.productType
+      );
+      // Only treat as a brand-new pass after a completed card, or when product type flips
+      const afterCompletedRecommendation = Boolean(recommendedProduct);
+      const startNewPass =
+        !isClosing &&
+        (productTypeSwitched ||
+          (afterCompletedRecommendation &&
+            detectsNewRecommendationPass(trimmed, prevIntent) &&
+            !detectsRecommendationRefine(trimmed)) ||
+          (detectsRecommendationRestart(trimmed) && !detectsRecommendationRefine(trimmed)));
+
+      if (!isClosing && startNewPass) {
+        // Brand-new recommendation pass — clear Looking For / preference memory
+        preferenceMessagesRef.current = intent.lookingFor?.length || intent.productType ? [trimmed] : [];
+        preferenceIntentRef.current =
+          intent.lookingFor?.length || intent.productType || intent.flavor || intent.cooling
+            ? { ...intent }
+            : null;
+        if (afterCompletedRecommendation) {
+          setRecommendedProduct(null);
+        }
+      } else if (!isClosing && (nluHit || intent.lookingFor?.length)) {
         preferenceMessagesRef.current = [...preferenceMessagesRef.current, trimmed].slice(-12);
-        const prevIntent = preferenceIntentRef.current;
         preferenceIntentRef.current = {
           ...intent,
           lookingFor: [
@@ -407,16 +458,31 @@ export default function LandingChatWidget() {
         };
       }
 
-      const matched = nluHit?.option || null;
+      const matched = !isClosing && nluHit?.option ? nluHit.option : null;
       const outbound = matched
         ? `::option::${matched.id}`
-        : buildEnrichedSearchMessage(trimmed, preferenceIntentRef.current);
+        : isClosing
+          ? trimmed
+          : buildEnrichedSearchMessage(trimmed, preferenceIntentRef.current);
 
       try {
         const session = await sendAssistantMessage(storeId, sessionKey, outbound);
         applySession(session);
         if (!session.locked) {
-          applyGuidedReply(session);
+          applyGuidedReply(
+            isClosing || session.conversationEnded
+              ? {
+                  ...session,
+                  conversationEnded: true,
+                  products: [],
+                  replyType: 'text',
+                  options: [],
+                }
+              : session
+          );
+          if (isClosing || session.conversationEnded) {
+            setRecommendedProduct(null);
+          }
         } else {
           const lockContent =
             session.reply ||
@@ -448,7 +514,7 @@ export default function LandingChatWidget() {
         setSending(false);
       }
     },
-    [locked, sending, storeId, sessionKey, applySession, appendTimeline, applyGuidedReply]
+    [locked, sending, storeId, sessionKey, applySession, appendTimeline, applyGuidedReply, recommendedProduct]
   );
 
   const legalAge = config?.legalAge ?? 19;
@@ -538,7 +604,8 @@ export default function LandingChatWidget() {
 
   const handleAnotherRecommendation = async () => {
     setRecommendedProduct(null);
-    // Keep preference memory so "another" still respects prior taste signals.
+    preferenceIntentRef.current = null;
+    preferenceMessagesRef.current = [];
     setCurrentOptions([]);
     setTimeline((prev) => [
       ...deactivateInteractiveActions(prev),
@@ -557,7 +624,14 @@ export default function LandingChatWidget() {
         'I want another recommendation'
       );
       applySession(session);
-      applyGuidedReply(session);
+      // Force discovery-only UI — never render a product card on restart
+      applyGuidedReply({
+        ...session,
+        recommendationRestart: true,
+        products: [],
+        replyType: 'text',
+        options: [],
+      });
     } catch (err) {
       appendTimeline({
         id: nextId(),
@@ -576,9 +650,82 @@ export default function LandingChatWidget() {
     const text = input.trim();
     if (!text) return;
 
-    if (detectsRecommendationRestart(text)) {
+    // Closings like "thanks" / "thank you" — never treat as another recommendation
+    if (detectsConversationEnd(text)) {
+      preferenceIntentRef.current = null;
+      preferenceMessagesRef.current = [];
       setInput('');
-      await handleAnotherRecommendation();
+      setCurrentOptions([]);
+      setTimeline((prev) => [
+        ...deactivateInteractiveActions(prev),
+        {
+          id: nextId(),
+          kind: 'text',
+          role: 'user',
+          content: text,
+        },
+      ]);
+      setSending(true);
+      try {
+        const session = await sendAssistantMessage(storeId, sessionKey, text);
+        applySession(session);
+        applyGuidedReply({
+          ...session,
+          conversationEnded: true,
+          products: [],
+          replyType: 'text',
+          options: [],
+        });
+        setRecommendedProduct(null);
+      } catch (err) {
+        appendTimeline({
+          id: nextId(),
+          kind: 'text',
+          role: 'assistant',
+          content: err.message || 'Something went wrong. Please try again.',
+        });
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
+    if (detectsRecommendationRestart(text) && !detectsRecommendationRefine(text)) {
+      preferenceIntentRef.current = null;
+      preferenceMessagesRef.current = [];
+      setRecommendedProduct(null);
+      setInput('');
+      setCurrentOptions([]);
+      setTimeline((prev) => [
+        ...deactivateInteractiveActions(prev),
+        {
+          id: nextId(),
+          kind: 'text',
+          role: 'user',
+          content: text,
+        },
+      ]);
+      setSending(true);
+      try {
+        const session = await sendAssistantMessage(storeId, sessionKey, text);
+        applySession(session);
+        applyGuidedReply({
+          ...session,
+          recommendationRestart: true,
+          products: [],
+          replyType: 'text',
+          options: [],
+        });
+      } catch (err) {
+        appendTimeline({
+          id: nextId(),
+          kind: 'text',
+          role: 'assistant',
+          content: err.message || 'Something went wrong. Please try again.',
+        });
+      } finally {
+        setSending(false);
+      }
       return;
     }
 
