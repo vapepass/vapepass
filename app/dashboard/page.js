@@ -20,6 +20,7 @@ import {
   getSubscriptionStatusLabel,
 } from '@/lib/subscription';
 import WelcomeOnboarding from '@/components/onboarding/WelcomeOnboarding';
+import AuthorizedDomainEditor from '@/components/AuthorizedDomainEditor';
 
 function statusVariant(status) {
   switch (status) {
@@ -75,7 +76,7 @@ function ChecklistItem({ ok, label }) {
 }
 
 export default function Dashboard() {
-  const { store } = useAuth();
+  const { store, refreshStore } = useAuth();
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -112,6 +113,10 @@ export default function Dashboard() {
     } catch {
       /* ignore */
     }
+  };
+
+  const handleAuthorizedDomainSaved = async () => {
+    await Promise.all([load(), refreshStore?.()]);
   };
 
   if (loading) {
@@ -178,6 +183,11 @@ export default function Dashboard() {
           <pre className="rounded-xl bg-ink text-white text-xs sm:text-sm p-4 overflow-x-auto whitespace-pre-wrap break-all">
             {status?.embedCode || 'Complete setup to generate your embed script.'}
           </pre>
+          <AuthorizedDomainEditor
+            allowedHostname={status?.allowedHostname || store?.allowedHostname}
+            websiteUrl={status?.websiteUrl || store?.websiteUrl || store?.productPageUrl}
+            onSaved={handleAuthorizedDomainSaved}
+          />
         </Card>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">

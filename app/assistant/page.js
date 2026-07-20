@@ -26,6 +26,8 @@ import {
   goLive,
   stopInventorySync,
 } from '@/lib/assistant-api';
+import AuthorizedDomainEditor from '@/components/AuthorizedDomainEditor';
+import { useAuth } from '@/context/AuthContext';
 
 /** Long scrapes (large catalogs + taxonomy) often exceed 30s */
 const POLL_INTERVAL_MS = 3000;
@@ -67,6 +69,7 @@ function isActiveSyncStatus(value) {
 
 export default function AssistantPage() {
   const { toast } = useToast();
+  const { refreshStore } = useAuth();
   const [status, setStatus] = useState(null);
   const [products, setProducts] = useState([]);
   const [productPageUrl, setProductPageUrlInput] = useState('');
@@ -467,6 +470,17 @@ export default function AssistantPage() {
               {copied ? <CheckCircle size={15} /> : <Copy size={15} />}
               {copied ? 'Copied' : 'Copy embed code'}
             </Button>
+
+            <AuthorizedDomainEditor
+              compact
+              allowedHostname={status?.allowedHostname}
+              websiteUrl={status?.websiteUrl || status?.productPageUrl}
+              onSaved={async () => {
+                await load();
+                await refreshStore?.();
+                toast('Authorized domain updated', 'success');
+              }}
+            />
           </Card>
 
           <Card className="space-y-4 border-brand-200 ring-1 ring-brand-100">

@@ -352,8 +352,8 @@ export default function LandingChatWidget({
           reason === 'unauthorized_domain'
             ? embedMode
               ? allowed
-                ? `This chatbot is only authorized for ${allowed}. Your test page must use that domain, or localhost / 127.0.0.1 for local testing. Update the store website URL in VapePass Settings if needed.`
-                : 'This chatbot is not authorized for this website. Set the store website URL in VapePass Settings to match the domain where the embed script is pasted.'
+                ? `This chatbot is only authorized for ${allowed}. Change the authorized domain in your VapePass Dashboard (or AI Assistant page), or open the embed on that domain.`
+                : 'This chatbot is not authorized for this website. Set an authorized domain in the VapePass Dashboard.'
               : 'This demo chatbot is not authorized for this domain. Set CLIENT_URL on the API to your Vercel URL (e.g. https://projectclient-zeta.vercel.app).'
             : reason === 'no_inventory'
               ? 'No recommendable products are available yet. Sync store inventory in the dashboard.'
