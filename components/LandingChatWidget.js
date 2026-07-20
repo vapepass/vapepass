@@ -7,6 +7,7 @@ import {
   getAssistantWidgetConfig,
   startAssistantSession,
   sendAssistantMessage,
+  setEmbedParentOrigin,
 } from '@/lib/assistant-public-api';
 import {
   FLOW_STEPS,
@@ -107,9 +108,13 @@ function productFromApi(product) {
   };
 }
 
-export default function LandingChatWidget() {
+export default function LandingChatWidget({
+  storeId: storeIdProp = null,
+  embedMode = false,
+  parentOrigin = null,
+} = {}) {
   const searchParams = useSearchParams();
-  const storeId = resolveStoreId(searchParams);
+  const storeId = (storeIdProp && String(storeIdProp).trim()) || resolveStoreId(searchParams);
 
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
@@ -137,6 +142,31 @@ export default function LandingChatWidget() {
 
   const storageKey = storeId ? `${SESSION_KEY_PREFIX}${storeId}` : null;
   const guidedKey = storeId ? `${GUIDED_KEY_PREFIX}${storeId}` : null;
+
+  useEffect(() => {
+    if (!embedMode) return undefined;
+    setEmbedParentOrigin(parentOrigin);
+    return () => setEmbedParentOrigin(null);
+  }, [embedMode, parentOrigin]);
+
+  /** Tell the host-page iframe loader how large to size the frame (FAB vs open panel). */
+  useEffect(() => {
+    if (!embedMode || typeof window === 'undefined') return;
+    const targetOrigin = parentOrigin || '*';
+    let width = 88;
+    let height = 88;
+    if (open && minimized) {
+      width = 420;
+      height = 120;
+    } else if (open) {
+      width = 420;
+      height = 720;
+    }
+    window.parent.postMessage(
+      { source: 'vapepass-assistant', type: 'resize', width, height },
+      targetOrigin
+    );
+  }, [embedMode, parentOrigin, open, minimized]);
 
   const appendTimeline = useCallback((items) => {
     setTimeline((prev) => [...prev, ...(Array.isArray(items) ? items : [items])]);
