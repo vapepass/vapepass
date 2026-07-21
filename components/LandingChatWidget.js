@@ -28,6 +28,7 @@ import {
   buildEnrichedSearchMessage,
   formatLookingForBullets,
   formatLookingForFromPreferences,
+  intentFromPreferences,
 } from '@/lib/chat/nlu';
 import TypingIndicator from '@/components/chat/TypingIndicator';
 import ChatMessageList from '@/components/chat/ChatMessageList';
@@ -244,6 +245,8 @@ export default function LandingChatWidget({
           prefsLookingFor.length > 0
             ? prefsLookingFor
             : formatLookingForBullets(matchIntent, preferenceMessagesRef.current);
+        const reasonsIntent =
+          intentFromPreferences(session.funnelState?.preferences) || matchIntent;
         // Only real product/flavor labels — never action chips like "Get Another Recommendation"
         const actionLabelRe =
           /\b(get another|another recommendation|something else|start over|view product)\b/i;
@@ -280,7 +283,7 @@ export default function LandingChatWidget({
               disclaimer: null,
               lookingFor,
               variants,
-              matchIntent,
+              matchIntent: reasonsIntent,
             });
             items.push({
               id: nextId(),
