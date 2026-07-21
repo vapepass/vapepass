@@ -27,6 +27,7 @@ import {
   matchOptionWithNlu,
   buildEnrichedSearchMessage,
   formatLookingForBullets,
+  formatLookingForFromPreferences,
 } from '@/lib/chat/nlu';
 import TypingIndicator from '@/components/chat/TypingIndicator';
 import ChatMessageList from '@/components/chat/ChatMessageList';
@@ -236,10 +237,13 @@ export default function LandingChatWidget({
         const apiProduct = session.products[0];
         const product = productFromApi(apiProduct);
         const matchIntent = preferenceIntentRef.current;
-        const lookingFor = formatLookingForBullets(
-          matchIntent,
-          preferenceMessagesRef.current
+        const prefsLookingFor = formatLookingForFromPreferences(
+          session.funnelState?.preferences
         );
+        const lookingFor =
+          prefsLookingFor.length > 0
+            ? prefsLookingFor
+            : formatLookingForBullets(matchIntent, preferenceMessagesRef.current);
         // Only real product/flavor labels — never action chips like "Get Another Recommendation"
         const actionLabelRe =
           /\b(get another|another recommendation|something else|start over|view product)\b/i;
