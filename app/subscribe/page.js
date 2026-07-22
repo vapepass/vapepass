@@ -29,6 +29,7 @@ import {
   canAccessDashboard,
 } from '@/lib/subscription';
 import { ApiError } from '@/lib/api';
+import { markWelcomePending } from '@/lib/onboarding';
 
 const PLAN_PERKS = [
   { icon: Lock, label: 'Dashboard unlock after payment' },
@@ -76,14 +77,16 @@ export default function SubscribePage() {
         await new Promise((resolve) => setTimeout(resolve, 800));
         await confirmCheckoutSession(sessionId || undefined);
         if (cancelled) return;
-        await refreshStore();
+        const storeData = await refreshStore();
+        if (storeData?._id) markWelcomePending(storeData._id);
         setSuccessNote('Subscription activated. Opening dashboard…');
       } catch (err) {
         if (cancelled) return;
         // Retry once without session id (looks up customer subscriptions)
         try {
           await confirmCheckoutSession();
-          await refreshStore();
+          const storeData = await refreshStore();
+          if (storeData?._id) markWelcomePending(storeData._id);
           setSuccessNote('Subscription activated. Opening dashboard…');
         } catch (retryErr) {
           setError(
@@ -109,9 +112,13 @@ export default function SubscribePage() {
 
   useEffect(() => {
     if (hasDashboardAccess) {
+      // Stripe return path — ensure pending flag exists even if confirm raced ahead
+      if (billingFlag === 'success' && store?._id) {
+        markWelcomePending(store._id);
+      }
       router.replace('/dashboard');
     }
-  }, [hasDashboardAccess, router]);
+  }, [hasDashboardAccess, router, billingFlag, store?._id]);
 
   const startCheckout = async () => {
     setLoading(true);
@@ -131,7 +138,8 @@ export default function SubscribePage() {
     setError('');
     try {
       await confirmCheckoutSession(sessionId || undefined);
-      await refreshStore();
+      const storeData = await refreshStore();
+      if (storeData?._id) markWelcomePending(storeData._id);
       setSuccessNote('Subscription activated. Opening dashboard…');
     } catch (err) {
       setError(
