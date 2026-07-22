@@ -637,104 +637,6 @@ export default function AssistantPage() {
               )}
             </div>
           </Card>
-
-          <Card>
-            <div className="flex items-center justify-between gap-3 mb-4">
-              <div className="flex items-center gap-3">
-                <Package size={18} className="text-brand-600" />
-                <div>
-                  <CardTitle>Store inventory</CardTitle>
-                  <CardDescription className="mt-0.5">
-                    View products, push selected ones, then finish setup
-                  </CardDescription>
-                </div>
-              </div>
-              <Badge variant={statusVariant(status?.inventorySyncStatus)}>
-                {syncBadgeLabel}
-              </Badge>
-            </div>
-
-            {products.length === 0 ? (
-              anySyncBusy ? (
-                <InventoryTableSkeleton rows={5} />
-              ) : (
-                <p className="text-sm text-body">
-                  No products yet. Enter your store website URL and run a scrape.
-                </p>
-              )
-            ) : (
-              <div className="overflow-x-auto -mx-1">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-muted border-b border-line-subtle">
-                      <th className="py-2 pr-3 font-medium">Product name</th>
-                      <th className="py-2 pr-3 font-medium">Product page</th>
-                      <th className="py-2 pr-3 font-medium">Status</th>
-                      <th className="py-2 pr-3 font-medium">Last updated</th>
-                      <th className="py-2 font-medium min-w-[180px]">Push to Customers This Month</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {products.map((p) => {
-                      const productStatus = p.isActive === false || p.status === 'inactive'
-                        ? 'inactive'
-                        : 'active';
-                      return (
-                        <tr key={p._id} className="border-b border-line-subtle/70">
-                          <td className="py-3 pr-3 text-ink font-medium">
-                            <div>{p.name}</div>
-                            {p.brand && (
-                              <div className="text-xs text-muted font-normal mt-0.5">{p.brand}</div>
-                            )}
-                            {p.variantName && (
-                              <div className="text-xs text-muted font-normal mt-0.5">
-                                Variant: {p.variantName}
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-3 pr-3">
-                            {p.productUrl ? (
-                              <a
-                                href={p.productUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-brand-600 hover:text-brand-700 text-xs font-medium underline-offset-2 hover:underline break-all"
-                              >
-                                View page
-                              </a>
-                            ) : (
-                              <span className="text-xs text-muted">—</span>
-                            )}
-                          </td>
-                          <td className="py-3 pr-3">
-                            <Badge variant={statusVariant(productStatus)}>
-                              {productStatus}
-                            </Badge>
-                          </td>
-                          <td className="py-3 pr-3 text-body whitespace-nowrap">
-                            {formatDate(p.updatedAt || p.lastSeenAt)}
-                          </td>
-                          <td className="py-3">
-                            <div className="flex items-center gap-2">
-                              <Toggle
-                                id={`priority-${p._id}`}
-                                checked={Boolean(p.isPriorityPromotion)}
-                                onChange={() => togglePriority(p)}
-                                label="Push to Customers This Month"
-                              />
-                              {togglingId === p._id && (
-                                <span className="text-xs text-muted">Saving…</span>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Card>
         </div>
 
         <div className="space-y-6">
@@ -827,6 +729,106 @@ export default function AssistantPage() {
           </Card>
         </div>
       </div>
+
+      <Card className="mt-6 space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-brand-50 flex items-center justify-center flex-shrink-0">
+              <Package size={20} className="text-brand-600" aria-hidden="true" />
+            </div>
+            <div className="min-w-0">
+              <CardTitle>Store inventory</CardTitle>
+              <CardDescription className="mt-0.5">
+                View products, push selected ones, then finish setup
+              </CardDescription>
+            </div>
+          </div>
+          <Badge variant={statusVariant(status?.inventorySyncStatus)}>
+            {syncBadgeLabel}
+          </Badge>
+        </div>
+
+        {products.length === 0 ? (
+          anySyncBusy ? (
+            <InventoryTableSkeleton rows={5} />
+          ) : (
+            <p className="text-sm text-body">
+              No products yet. Enter your store website URL and run a scrape.
+            </p>
+          )
+        ) : (
+          <div className="overflow-x-auto -mx-1 sm:mx-0 rounded-xl border border-line-subtle">
+            <table className="w-full min-w-[760px] text-sm">
+              <thead>
+                <tr className="text-left text-muted border-b border-line-subtle bg-canvas/80">
+                  <th className="py-3 px-4 font-medium">Product name</th>
+                  <th className="py-3 px-4 font-medium whitespace-nowrap">Product page</th>
+                  <th className="py-3 px-4 font-medium">Status</th>
+                  <th className="py-3 px-4 font-medium whitespace-nowrap">Last updated</th>
+                  <th className="py-3 px-4 font-medium min-w-[200px]">Push to Customers This Month</th>
+                </tr>
+              </thead>
+              <tbody>
+                {products.map((p) => {
+                  const productStatus = p.isActive === false || p.status === 'inactive'
+                    ? 'inactive'
+                    : 'active';
+                  return (
+                    <tr key={p._id} className="border-b border-line-subtle/70 last:border-b-0">
+                      <td className="py-3.5 px-4 text-ink font-medium align-top">
+                        <div className="leading-snug max-w-xl">{p.name}</div>
+                        {p.brand && (
+                          <div className="text-xs text-muted font-normal mt-0.5">{p.brand}</div>
+                        )}
+                        {p.variantName && (
+                          <div className="text-xs text-muted font-normal mt-0.5">
+                            Variant: {p.variantName}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4 align-top whitespace-nowrap">
+                        {p.productUrl ? (
+                          <a
+                            href={p.productUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-brand-600 hover:text-brand-700 text-xs font-medium underline-offset-2 hover:underline"
+                          >
+                            View page
+                          </a>
+                        ) : (
+                          <span className="text-xs text-muted">—</span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4 align-top">
+                        <Badge variant={statusVariant(productStatus)}>
+                          {productStatus}
+                        </Badge>
+                      </td>
+                      <td className="py-3.5 px-4 text-body whitespace-nowrap align-top">
+                        {formatDate(p.updatedAt || p.lastSeenAt)}
+                      </td>
+                      <td className="py-3.5 px-4 align-top">
+                        <div className="flex items-center gap-2">
+                          <Toggle
+                            id={`priority-${p._id}`}
+                            checked={Boolean(p.isPriorityPromotion)}
+                            onChange={() => togglePriority(p)}
+                            label="Push to Customers This Month"
+                          />
+                          {togglingId === p._id && (
+                            <span className="text-xs text-muted">Saving…</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
       </ContentReveal>
     </DashboardLayout>
   );
