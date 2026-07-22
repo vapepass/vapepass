@@ -19,7 +19,6 @@ import {
   getSubscriptionBadgeVariant,
   getSubscriptionStatusLabel,
 } from '@/lib/subscription';
-import WelcomeOnboarding from '@/components/onboarding/WelcomeOnboarding';
 import AuthorizedDomainEditor from '@/components/AuthorizedDomainEditor';
 
 function statusVariant(status) {
@@ -129,8 +128,6 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
-      <WelcomeOnboarding />
-
       <ContentReveal>
         <PageHeader
           title="Dashboard"

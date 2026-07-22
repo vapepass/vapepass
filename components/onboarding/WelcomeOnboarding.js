@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
   Download,
   FileText,
   Handshake,
+  HelpCircle,
   Loader2,
   Sparkles,
 } from 'lucide-react';
@@ -14,6 +15,8 @@ import Button from '@/components/ui/Button';
 import { Input, FormField } from '@/components/ui/Input';
 import { useAuth } from '@/context/AuthContext';
 import {
+  dismissWelcomeOnboarding,
+  completeWelcomeOnboarding,
   markHandoverDownloaded,
   openHandoverDocument,
   shouldShowWelcomeOnboarding,
@@ -23,7 +26,7 @@ import {
 import { ApiError, fieldErrorsToMap } from '@/lib/api';
 
 const VIEWS = {
-  WELCOME: 'welcome',
+  RESOURCES: 'resources',
   SETUP: 'setup',
   SUCCESS: 'success',
 };
@@ -86,26 +89,81 @@ function OptionCard({ icon: Icon, title, description, children, accent }) {
   );
 }
 
+function ResourceCards({ onDownload, onRequestSetup }) {
+  return (
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <OptionCard
+        icon={FileText}
+        title="Get the Handover Document"
+        accent="soft"
+        description={
+          <>
+            <p>
+              If you already have an in-house developer or web agency, simply download our
+              integration guide and share it with them.
+            </p>
+            <p>
+              The document contains everything needed to install the VapePass chatbot on your
+              website.
+            </p>
+          </>
+        }
+      >
+        <Button variant="secondary" className="w-full" onClick={onDownload}>
+          <Download size={16} /> Download Handover Document
+        </Button>
+      </OptionCard>
+
+      <OptionCard
+        icon={Handshake}
+        title="Request Free Setup Assistance"
+        accent="brand"
+        description={
+          <>
+            <p>Don&apos;t have a developer? No problem.</p>
+            <p>
+              Our team will help you install the chatbot on your website completely free of
+              charge.
+            </p>
+            <p>
+              During business hours, one of our support representatives will respond, schedule
+              a meeting if needed, and guide you through the installation process.
+            </p>
+          </>
+        }
+      >
+        <Button className="w-full" onClick={onRequestSetup}>
+          <Handshake size={16} /> Request Free Setup Assistance
+        </Button>
+      </OptionCard>
+    </div>
+  );
+}
+
 /**
- * Post-subscription welcome onboarding modal.
- * Mount on the dashboard; visibility is controlled by per-store local state.
+ * Post-subscription welcome (once) + reusable help resources modal.
+ * Mount inside DashboardLayout so Need Help works on every retailer page.
  */
-export default function WelcomeOnboarding() {
+export default function WelcomeOnboarding({ helpOpen = false, onHelpOpenChange }) {
   const { user, store } = useAuth();
   const storeId = store?._id;
 
   const [ready, setReady] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [view, setView] = useState(VIEWS.WELCOME);
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
+  /** 'welcome' = first-time banner; 'help' = resources only */
+  const [mode, setMode] = useState('welcome');
+  const [view, setView] = useState(VIEWS.RESOURCES);
   const [form, setForm] = useState(() => buildDefaultForm(null, null));
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
+  const open = welcomeOpen || helpOpen;
+
   useEffect(() => {
     if (!storeId) {
       setReady(true);
-      setOpen(false);
+      setWelcomeOpen(false);
       return;
     }
 
@@ -113,19 +171,25 @@ export default function WelcomeOnboarding() {
       subscriptionStatus: store?.subscriptionStatus,
     });
 
-    // Slight delay so the dashboard paints first — feels premium, not interruptive.
     const timer = setTimeout(() => {
       if (show) {
-        setView(VIEWS.WELCOME);
-        setOpen(true);
-      } else {
-        setOpen(false);
+        setMode('welcome');
+        setView(VIEWS.RESOURCES);
+        setWelcomeOpen(true);
       }
       setReady(true);
     }, 380);
 
     return () => clearTimeout(timer);
   }, [storeId, store?.subscriptionStatus]);
+
+  useEffect(() => {
+    if (helpOpen) {
+      setMode('help');
+      setView(VIEWS.RESOURCES);
+      setWelcomeOpen(false);
+    }
+  }, [helpOpen]);
 
   useEffect(() => {
     if (open && view === VIEWS.SETUP) {
@@ -135,15 +199,24 @@ export default function WelcomeOnboarding() {
     }
   }, [open, view, user, store]);
 
-  const modalTitle = useMemo(() => {
-    if (view === VIEWS.SETUP) return 'Request Free Setup';
-    return null;
-  }, [view]);
+  const persistDismiss = useCallback(() => {
+    if (storeId) dismissWelcomeOnboarding(storeId);
+  }, [storeId]);
 
   const handleClose = () => {
     if (submitting) return;
-    // Hide for this Dashboard view only — reappears on next load.
-    setOpen(false);
+
+    if (welcomeOpen) {
+      persistDismiss();
+      setWelcomeOpen(false);
+    }
+
+    if (helpOpen) {
+      onHelpOpenChange?.(false);
+    }
+
+    setView(VIEWS.RESOURCES);
+    setMode('welcome');
   };
 
   const handleDownloadHandover = () => {
@@ -206,110 +279,97 @@ export default function WelcomeOnboarding() {
     }
   };
 
-  if (!ready || !open) return null;
+  const handleSuccessContinue = () => {
+    if (storeId) completeWelcomeOnboarding(storeId);
+    handleClose();
+  };
+
+  const modalTitle = useMemo(() => {
+    if (view === VIEWS.SETUP) return 'Request Free Setup Assistance';
+    if (mode === 'help' && view === VIEWS.RESOURCES) return 'Help & Resources';
+    return null;
+  }, [view, mode]);
+
+  const modalDescription = useMemo(() => {
+    if (view === VIEWS.SETUP) {
+      return 'Share a few details and our team will help install VapePass on your website — free of charge.';
+    }
+    if (mode === 'help' && view === VIEWS.RESOURCES) {
+      return 'Download the integration guide or request free setup assistance anytime.';
+    }
+    return undefined;
+  }, [view, mode]);
+
+  if (!ready && !helpOpen) return null;
+  if (!open) return null;
+
+  const showWelcomeBanner = mode === 'welcome' && view === VIEWS.RESOURCES;
+  const resourcesBackTarget = mode === 'help' ? VIEWS.RESOURCES : VIEWS.RESOURCES;
 
   return (
     <Modal
       open={open}
       onClose={handleClose}
       title={modalTitle || undefined}
-      description={
-        view === VIEWS.SETUP
-          ? 'Share a few details and our team will help install VapePass on your website — free of charge.'
-          : undefined
-      }
-      size={view === VIEWS.WELCOME ? '3xl' : 'lg'}
+      description={modalDescription}
+      size={view === VIEWS.RESOURCES ? '3xl' : 'lg'}
     >
-      {view === VIEWS.WELCOME && (
-        <div className="-mt-1">
-          <div className="relative overflow-hidden rounded-2xl gradient-brand px-5 py-6 sm:px-7 sm:py-7 text-white mb-6 pr-12">
-            <div
-              className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/10 blur-2xl"
-              aria-hidden="true"
-            />
-            <div
-              className="pointer-events-none absolute -bottom-12 -left-6 h-28 w-28 rounded-full bg-violet-300/20 blur-2xl"
-              aria-hidden="true"
-            />
-            <div className="relative flex items-start gap-3">
-              <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
-                <Sparkles size={22} aria-hidden="true" />
+      {view === VIEWS.RESOURCES && (
+        <div className={showWelcomeBanner ? '-mt-1' : ''}>
+          {showWelcomeBanner && (
+            <>
+              <div className="relative overflow-hidden rounded-2xl gradient-brand px-5 py-6 sm:px-7 sm:py-7 text-white mb-6 pr-12">
+                <div
+                  className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/10 blur-2xl"
+                  aria-hidden="true"
+                />
+                <div
+                  className="pointer-events-none absolute -bottom-12 -left-6 h-28 w-28 rounded-full bg-violet-300/20 blur-2xl"
+                  aria-hidden="true"
+                />
+                <div className="relative flex items-start gap-3">
+                  <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
+                    <Sparkles size={22} aria-hidden="true" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/75">
+                      VapePass
+                    </p>
+                    <h2 className="font-display mt-1 text-2xl font-bold tracking-tight sm:text-[1.75rem]">
+                      Welcome to VapePass!
+                    </h2>
+                    <p className="mt-2 max-w-xl text-sm leading-relaxed text-white/90 sm:text-[15px]">
+                      Your subscription has been activated successfully.
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/75">
-                  VapePass
-                </p>
-                <h2 className="font-display mt-1 text-2xl font-bold tracking-tight sm:text-[1.75rem]">
-                  Welcome to VapePass!
-                </h2>
-                <p className="mt-2 max-w-xl text-sm leading-relaxed text-white/90 sm:text-[15px]">
-                  Your subscription has been activated successfully.
-                </p>
-              </div>
+
+              <p className="text-sm leading-relaxed text-body sm:text-[15px]">
+                You&apos;re now ready to install the VapePass AI Assistant on your website.
+                Choose one of the following options to continue.
+              </p>
+            </>
+          )}
+
+          <div className={showWelcomeBanner ? 'mt-6' : ''}>
+            <ResourceCards
+              onDownload={handleDownloadHandover}
+              onRequestSetup={() => setView(VIEWS.SETUP)}
+            />
+          </div>
+
+          {showWelcomeBanner && (
+            <div className="mt-5 flex justify-center">
+              <button
+                type="button"
+                onClick={handleClose}
+                className="text-sm font-medium text-muted transition-colors hover:text-ink"
+              >
+                I&apos;ll do this later
+              </button>
             </div>
-          </div>
-
-          <p className="text-sm leading-relaxed text-body sm:text-[15px]">
-            You&apos;re now ready to install the VapePass AI Assistant on your website.
-            Choose one of the following options to continue.
-          </p>
-
-          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-            <OptionCard
-              icon={FileText}
-              title="Get the Handover Document"
-              accent="soft"
-              description={
-                <>
-                  <p>
-                    If you already have an in-house developer or web agency, simply download our
-                    integration guide and share it with them.
-                  </p>
-                  <p>
-                    The document contains everything needed to install the VapePass chatbot on your
-                    website.
-                  </p>
-                </>
-              }
-            >
-              <Button variant="secondary" className="w-full" onClick={handleDownloadHandover}>
-                <Download size={16} /> Download Handover Document
-              </Button>
-            </OptionCard>
-
-            <OptionCard
-              icon={Handshake}
-              title="Request Free Setup Assistance"
-              accent="brand"
-              description={
-                <>
-                  <p>Don&apos;t have a developer? No problem.</p>
-                  <p>
-                    Our team will help you install the chatbot on your website completely free of
-                    charge.
-                  </p>
-                  <p>
-                    During business hours, one of our support representatives will respond, schedule
-                    a meeting if needed, and guide you through the installation process.
-                  </p>
-                </>
-              }
-            >
-              <Button className="w-full" onClick={() => setView(VIEWS.SETUP)}>
-                <Handshake size={16} /> Request Free Setup
-              </Button>
-            </OptionCard>
-          </div>
-
-          <div className="mt-5 flex justify-center">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="text-sm font-medium text-muted transition-colors hover:text-ink"
-            >
-              I&apos;ll do this later
-            </button>
-          </div>
+          )}
         </div>
       )}
 
@@ -354,12 +414,7 @@ export default function WelcomeOnboarding() {
                 disabled={submitting}
               />
             </FormField>
-            <FormField
-              label="Store Name"
-              htmlFor="setup-store"
-              required
-              error={errors.storeName}
-            >
+            <FormField label="Store Name" htmlFor="setup-store" required error={errors.storeName}>
               <Input
                 id="setup-store"
                 name="storeName"
@@ -372,12 +427,7 @@ export default function WelcomeOnboarding() {
             </FormField>
           </div>
 
-          <FormField
-            label="Website URL"
-            htmlFor="setup-website"
-            required
-            error={errors.websiteUrl}
-          >
+          <FormField label="Website URL" htmlFor="setup-website" required error={errors.websiteUrl}>
             <Input
               id="setup-website"
               name="websiteUrl"
@@ -415,7 +465,10 @@ export default function WelcomeOnboarding() {
           </FormField>
 
           {submitError && (
-            <p className="rounded-xl border border-red-200 bg-danger-50 px-4 py-3 text-sm text-danger-600" role="alert">
+            <p
+              className="rounded-xl border border-red-200 bg-danger-50 px-4 py-3 text-sm text-danger-600"
+              role="alert"
+            >
               {submitError}
             </p>
           )}
@@ -425,7 +478,7 @@ export default function WelcomeOnboarding() {
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => setView(VIEWS.WELCOME)}
+              onClick={() => setView(resourcesBackTarget)}
               disabled={submitting}
               className="!min-h-10"
             >
@@ -459,10 +512,32 @@ export default function WelcomeOnboarding() {
             Our team will contact you during business hours.
           </p>
           <div className="mt-7 flex justify-center">
-            <Button onClick={handleClose}>Continue to Dashboard</Button>
+            <Button onClick={handleSuccessContinue}>
+              {mode === 'help' ? 'Close' : 'Continue to Dashboard'}
+            </Button>
           </div>
         </div>
       )}
     </Modal>
+  );
+}
+
+/** Persistent sidebar / header control to reopen setup resources. */
+export function NeedHelpButton({ onClick, className = '' }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium',
+        'min-h-[44px] text-body transition-all duration-[var(--duration-fast)]',
+        'hover:bg-canvas hover:text-ink',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30',
+        className,
+      ].join(' ')}
+    >
+      <HelpCircle size={18} aria-hidden="true" />
+      Need Help?
+    </button>
   );
 }

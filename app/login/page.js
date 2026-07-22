@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Mail, Lock } from 'lucide-react';
-import AuthLayout from '@/components/AuthLayout';
+import LoginLayout from '@/components/LoginLayout';
 import GuestGuard from '@/components/GuestGuard';
 import { Input, FormField, InputGroup, InputIcon } from '@/components/ui/Input';
 import { useAuth } from '@/context/AuthContext';
@@ -73,13 +73,14 @@ export default function Login() {
 
   return (
     <GuestGuard>
-      <AuthLayout
-        title="Sign in to your account"
-        subtitle="Welcome back — sign in to continue"
+      <LoginLayout
         footer={
-          <p className="text-sm text-[#6b7280]">
+          <p className="text-sm text-body">
             Don&apos;t have an account?{' '}
-            <Link href="/register" className="font-semibold text-brand-600 hover:text-brand-700 transition-colors">
+            <Link
+              href="/register"
+              className="font-semibold text-brand-600 hover:text-brand-700 transition-colors"
+            >
               Create account
             </Link>
           </p>
@@ -87,7 +88,10 @@ export default function Login() {
       >
         <form onSubmit={handleSubmit} className="space-y-5" noValidate>
           {errors._form && (
-            <p className="text-sm text-danger-600 bg-danger-50 border border-red-200 rounded-xl px-4 py-3" role="alert">
+            <p
+              className="text-sm text-danger-600 bg-danger-50 border border-red-200 rounded-xl px-4 py-3"
+              role="alert"
+            >
               {errors._form}
             </p>
           )}
@@ -97,10 +101,12 @@ export default function Login() {
             htmlFor="email"
             error={errors.email}
             required
-            className="[&_label]:font-semibold [&_label]:text-[#111827]"
+            className="[&_label]:font-semibold [&_label]:text-ink"
           >
             <InputGroup>
-              <InputIcon><Mail size={16} /></InputIcon>
+              <InputIcon>
+                <Mail size={16} />
+              </InputIcon>
               <Input
                 id="email"
                 type="email"
@@ -119,10 +125,12 @@ export default function Login() {
             htmlFor="password"
             error={errors.password}
             required
-            className="[&_label]:font-semibold [&_label]:text-[#111827]"
+            className="[&_label]:font-semibold [&_label]:text-ink"
           >
             <InputGroup>
-              <InputIcon><Lock size={16} /></InputIcon>
+              <InputIcon>
+                <Lock size={16} />
+              </InputIcon>
               <Input
                 id="password"
                 type="password"
@@ -150,16 +158,17 @@ export default function Login() {
             disabled={loading}
             className={[
               'w-full h-12 mt-1 text-[15px] font-semibold text-white rounded-xl',
-              'bg-brand-600 hover:bg-brand-700 transition-colors duration-200',
+              'bg-brand-600 hover:bg-brand-700 transition-all duration-200',
+              'shadow-[0_8px_20px_rgba(124,58,237,0.28)] hover:shadow-[0_10px_24px_rgba(124,58,237,0.35)]',
               'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-500/30',
-              'disabled:opacity-60 disabled:pointer-events-none',
+              'disabled:opacity-60 disabled:pointer-events-none disabled:shadow-none',
               'select-none touch-manipulation',
             ].join(' ')}
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
-      </AuthLayout>
+      </LoginLayout>
     </GuestGuard>
   );
 }

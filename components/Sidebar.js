@@ -9,6 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 import { isSidebarRouteVisible } from '@/lib/nav-visibility';
 import { getSubscriptionBadgeVariant, getSubscriptionStatusLabel } from '@/lib/subscription';
 import Badge from '@/components/ui/Badge';
+import { NeedHelpButton } from '@/components/onboarding/WelcomeOnboarding';
 
 /** Visible retailer nav — loyalty routes remain in app but are hidden via nav-visibility. */
 const nav = [
@@ -17,7 +18,7 @@ const nav = [
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
-export default function Sidebar({ onClose }) {
+export default function Sidebar({ onClose, onNeedHelp }) {
   const path = usePathname();
   const { store } = useAuth();
   const storeName = store?.name || 'Your Store';
@@ -65,6 +66,12 @@ export default function Sidebar({ onClose }) {
           );
         })}
       </nav>
+
+      {onNeedHelp && (
+        <div className="px-3 pb-2">
+          <NeedHelpButton onClick={onNeedHelp} />
+        </div>
+      )}
 
       <div className="p-4 mx-3 mb-4 rounded-xl bg-gradient-to-br from-brand-50 to-brand-100/50 border border-brand-100">
         <div className="flex items-center gap-2 mb-1">

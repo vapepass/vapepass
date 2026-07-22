@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Mail, Lock, Store, User, Phone, Globe, MapPin } from 'lucide-react';
-import AuthLayout from '@/components/AuthLayout';
+import RegisterLayout from '@/components/RegisterLayout';
 import GuestGuard from '@/components/GuestGuard';
 import { Input, FormField, InputGroup, InputIcon } from '@/components/ui/Input';
 import { useAuth } from '@/context/AuthContext';
@@ -27,6 +27,9 @@ const INITIAL = {
   password: '',
   confirmPassword: '',
 };
+
+const selectClassName =
+  'w-full h-11 rounded-xl border border-line bg-white px-3.5 text-sm text-ink transition-all duration-[var(--duration-fast)] focus:outline-none focus:ring-[3px] focus:border-brand-500 focus:ring-brand-500/15';
 
 export default function Register() {
   const router = useRouter();
@@ -97,144 +100,290 @@ export default function Register() {
 
   return (
     <GuestGuard redirectTo="/subscribe">
-      <AuthLayout
-        title="Create your store account"
-        subtitle="Sign up, subscribe, then unlock your dashboard"
+      <RegisterLayout
         footer={
-          <p className="text-sm text-[#6b7280]">
+          <p className="text-sm text-body">
             Already have an account?{' '}
-            <Link href="/login" className="font-semibold text-brand-600 hover:text-brand-700 transition-colors">
+            <Link
+              href="/login"
+              className="font-semibold text-brand-600 hover:text-brand-700 transition-colors"
+            >
               Sign in
             </Link>
           </p>
         }
       >
-        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 sm:gap-5" noValidate>
           {errors._form && (
-            <p className="text-sm text-danger-600 bg-danger-50 border border-red-200 rounded-xl px-4 py-3" role="alert">
+            <p
+              className="text-sm text-danger-600 bg-danger-50 border border-red-200 rounded-xl px-4 py-3"
+              role="alert"
+            >
               {errors._form}
             </p>
           )}
 
-          <FormField label="Store Name" htmlFor="storeName" error={errors.storeName}>
-            <InputGroup>
-              <InputIcon><Store size={16} /></InputIcon>
-              <Input id="storeName" value={form.storeName} onChange={set('storeName')} placeholder="Vape City" hasIcon error={errors.storeName} />
-            </InputGroup>
-          </FormField>
+          <fieldset className="m-0 min-w-0 border-0 p-0">
+            <legend className="mb-2.5 p-0 text-[0.7rem] font-bold uppercase tracking-[0.08em] text-brand-600">
+              Store details
+            </legend>
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 sm:gap-4">
+              <FormField label="Store Name" htmlFor="storeName" error={errors.storeName} required>
+                <InputGroup>
+                  <InputIcon>
+                    <Store size={16} />
+                  </InputIcon>
+                  <Input
+                    id="storeName"
+                    value={form.storeName}
+                    onChange={set('storeName')}
+                    placeholder="Vape City"
+                    hasIcon
+                    error={errors.storeName}
+                    autoComplete="organization"
+                  />
+                </InputGroup>
+              </FormField>
 
-          <FormField label="Owner Name" htmlFor="ownerName" error={errors.ownerName}>
-            <InputGroup>
-              <InputIcon><User size={16} /></InputIcon>
-              <Input id="ownerName" value={form.ownerName} onChange={set('ownerName')} placeholder="Alex Smith" hasIcon error={errors.ownerName} />
-            </InputGroup>
-          </FormField>
+              <FormField label="Owner Name" htmlFor="ownerName" error={errors.ownerName} required>
+                <InputGroup>
+                  <InputIcon>
+                    <User size={16} />
+                  </InputIcon>
+                  <Input
+                    id="ownerName"
+                    value={form.ownerName}
+                    onChange={set('ownerName')}
+                    placeholder="Alex Smith"
+                    hasIcon
+                    error={errors.ownerName}
+                    autoComplete="name"
+                  />
+                </InputGroup>
+              </FormField>
 
-          <FormField label="Phone Number" htmlFor="phone" error={errors.phone}>
-            <InputGroup>
-              <InputIcon><Phone size={16} /></InputIcon>
-              <Input id="phone" type="tel" value={form.phone} onChange={set('phone')} placeholder="+1 604 555 0100" hasIcon error={errors.phone} />
-            </InputGroup>
-          </FormField>
+              <FormField label="Phone Number" htmlFor="phone" error={errors.phone} required>
+                <InputGroup>
+                  <InputIcon>
+                    <Phone size={16} />
+                  </InputIcon>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    value={form.phone}
+                    onChange={set('phone')}
+                    placeholder="+1 604 555 0100"
+                    hasIcon
+                    error={errors.phone}
+                    autoComplete="tel"
+                  />
+                </InputGroup>
+              </FormField>
 
-          <FormField label="Email" htmlFor="email" error={errors.email}>
-            <InputGroup>
-              <InputIcon><Mail size={16} /></InputIcon>
-              <Input id="email" type="email" autoComplete="email" value={form.email} onChange={set('email')} placeholder="you@store.com" hasIcon error={errors.email} />
-            </InputGroup>
-          </FormField>
+              <FormField label="Email" htmlFor="email" error={errors.email} required>
+                <InputGroup>
+                  <InputIcon>
+                    <Mail size={16} />
+                  </InputIcon>
+                  <Input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    value={form.email}
+                    onChange={set('email')}
+                    placeholder="you@store.com"
+                    hasIcon
+                    error={errors.email}
+                  />
+                </InputGroup>
+              </FormField>
 
-          <FormField
-            label="Website URL"
-            htmlFor="websiteUrl"
-            error={errors.websiteUrl}
-            hint="Saved for your embed script domain. Inventory sync starts later from the dashboard."
-          >
-            <InputGroup>
-              <InputIcon><Globe size={16} /></InputIcon>
-              <Input id="websiteUrl" value={form.websiteUrl} onChange={set('websiteUrl')} placeholder="https://yourstore.com" hasIcon error={errors.websiteUrl} />
-            </InputGroup>
-          </FormField>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField label="Country" htmlFor="country" error={errors.country}>
-              <select
-                id="country"
-                value={form.country}
-                onChange={set('country')}
-                className="w-full h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink"
+              <FormField
+                label="Website URL"
+                htmlFor="websiteUrl"
+                error={errors.websiteUrl}
+                hint="Saved for your embed script domain. Inventory sync starts later from the dashboard."
+                required
+                className="sm:col-span-2"
               >
-                {COUNTRY_OPTIONS.map((c) => (
-                  <option key={c.code} value={c.code}>{c.label}</option>
-                ))}
-              </select>
-            </FormField>
+                <InputGroup>
+                  <InputIcon>
+                    <Globe size={16} />
+                  </InputIcon>
+                  <Input
+                    id="websiteUrl"
+                    value={form.websiteUrl}
+                    onChange={set('websiteUrl')}
+                    placeholder="https://yourstore.com"
+                    hasIcon
+                    error={errors.websiteUrl}
+                    autoComplete="url"
+                  />
+                </InputGroup>
+              </FormField>
+            </div>
+          </fieldset>
 
-            {form.country === 'CA' ? (
-              <FormField label="Province / Region" htmlFor="province" error={errors.province}>
+          <fieldset className="m-0 min-w-0 border-0 p-0">
+            <legend className="mb-2.5 p-0 text-[0.7rem] font-bold uppercase tracking-[0.08em] text-brand-600">
+              Location
+            </legend>
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 sm:gap-4">
+              <FormField label="Country" htmlFor="country" error={errors.country} required>
                 <select
-                  id="province"
-                  value={form.province}
-                  onChange={set('province')}
-                  className="w-full h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink"
+                  id="country"
+                  value={form.country}
+                  onChange={set('country')}
+                  className={selectClassName}
                 >
-                  {CANADIAN_PROVINCES.map((p) => (
-                    <option key={p.code} value={p.code}>{p.label}</option>
+                  {COUNTRY_OPTIONS.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.label}
+                    </option>
                   ))}
                 </select>
               </FormField>
-            ) : (
-              <FormField label="State / Region" htmlFor="province" error={errors.province}>
-                <Input id="province" value={form.province} onChange={set('province')} placeholder="Optional" />
+
+              {form.country === 'CA' ? (
+                <FormField
+                  label="Province / Region"
+                  htmlFor="province"
+                  error={errors.province}
+                  required
+                >
+                  <select
+                    id="province"
+                    value={form.province}
+                    onChange={set('province')}
+                    className={selectClassName}
+                  >
+                    {CANADIAN_PROVINCES.map((p) => (
+                      <option key={p.code} value={p.code}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+              ) : (
+                <FormField label="State / Region" htmlFor="province" error={errors.province}>
+                  <Input
+                    id="province"
+                    value={form.province}
+                    onChange={set('province')}
+                    placeholder="Optional"
+                  />
+                </FormField>
+              )}
+
+              <FormField label="City" htmlFor="city" error={errors.city} required>
+                <InputGroup>
+                  <InputIcon>
+                    <MapPin size={16} />
+                  </InputIcon>
+                  <Input
+                    id="city"
+                    value={form.city}
+                    onChange={set('city')}
+                    placeholder="Vancouver"
+                    hasIcon
+                    error={errors.city}
+                    autoComplete="address-level2"
+                  />
+                </InputGroup>
               </FormField>
-            )}
-          </div>
 
-          <FormField label="City" htmlFor="city" error={errors.city}>
-            <InputGroup>
-              <InputIcon><MapPin size={16} /></InputIcon>
-              <Input id="city" value={form.city} onChange={set('city')} placeholder="Vancouver" hasIcon error={errors.city} />
-            </InputGroup>
-          </FormField>
+              <FormField label="Address" htmlFor="address" error={errors.address} required>
+                <Input
+                  id="address"
+                  value={form.address}
+                  onChange={set('address')}
+                  placeholder="123 Main Street"
+                  error={errors.address}
+                  autoComplete="street-address"
+                />
+              </FormField>
+            </div>
+          </fieldset>
 
-          <FormField label="Address" htmlFor="address" error={errors.address}>
-            <Input id="address" value={form.address} onChange={set('address')} placeholder="123 Main Street" error={errors.address} />
-          </FormField>
+          <fieldset className="m-0 min-w-0 border-0 p-0">
+            <legend className="mb-2.5 p-0 text-[0.7rem] font-bold uppercase tracking-[0.08em] text-brand-600">
+              Plan & security
+            </legend>
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 sm:gap-4">
+              <FormField
+                label="Subscription Plan"
+                htmlFor="subscriptionPlan"
+                className="sm:col-span-2"
+              >
+                <select
+                  id="subscriptionPlan"
+                  value={form.subscriptionPlan}
+                  onChange={set('subscriptionPlan')}
+                  className={selectClassName}
+                >
+                  <option value="pro">Pro — $99/month</option>
+                </select>
+              </FormField>
 
-          <FormField label="Subscription Plan" htmlFor="subscriptionPlan">
-            <select
-              id="subscriptionPlan"
-              value={form.subscriptionPlan}
-              onChange={set('subscriptionPlan')}
-              className="w-full h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink"
-            >
-              <option value="pro">Pro — $99/month</option>
-            </select>
-          </FormField>
+              <FormField label="Password" htmlFor="password" error={errors.password} required>
+                <InputGroup>
+                  <InputIcon>
+                    <Lock size={16} />
+                  </InputIcon>
+                  <Input
+                    id="password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={form.password}
+                    onChange={set('password')}
+                    hasIcon
+                    error={errors.password}
+                    placeholder="Min. 8 characters"
+                  />
+                </InputGroup>
+              </FormField>
 
-          <FormField label="Password" htmlFor="password" error={errors.password}>
-            <InputGroup>
-              <InputIcon><Lock size={16} /></InputIcon>
-              <Input id="password" type="password" autoComplete="new-password" value={form.password} onChange={set('password')} hasIcon error={errors.password} />
-            </InputGroup>
-          </FormField>
-
-          <FormField label="Confirm Password" htmlFor="confirmPassword" error={errors.confirmPassword}>
-            <InputGroup>
-              <InputIcon><Lock size={16} /></InputIcon>
-              <Input id="confirmPassword" type="password" autoComplete="new-password" value={form.confirmPassword} onChange={set('confirmPassword')} hasIcon error={errors.confirmPassword} />
-            </InputGroup>
-          </FormField>
+              <FormField
+                label="Confirm Password"
+                htmlFor="confirmPassword"
+                error={errors.confirmPassword}
+                required
+              >
+                <InputGroup>
+                  <InputIcon>
+                    <Lock size={16} />
+                  </InputIcon>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    autoComplete="new-password"
+                    value={form.confirmPassword}
+                    onChange={set('confirmPassword')}
+                    hasIcon
+                    error={errors.confirmPassword}
+                    placeholder="Repeat password"
+                  />
+                </InputGroup>
+              </FormField>
+            </div>
+          </fieldset>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full h-12 rounded-full bg-brand-600 text-white font-semibold hover:bg-brand-700 disabled:opacity-60 transition-colors"
+            className={[
+              'w-full h-12 mt-1 text-[15px] font-semibold text-white rounded-xl',
+              'bg-brand-600 hover:bg-brand-700 transition-all duration-200',
+              'shadow-[0_8px_20px_rgba(124,58,237,0.28)] hover:shadow-[0_10px_24px_rgba(124,58,237,0.35)]',
+              'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-500/30',
+              'disabled:opacity-60 disabled:pointer-events-none disabled:shadow-none',
+              'select-none touch-manipulation',
+            ].join(' ')}
           >
             {loading ? 'Creating account…' : 'Continue to subscription'}
           </button>
         </form>
-      </AuthLayout>
+      </RegisterLayout>
     </GuestGuard>
   );
 }

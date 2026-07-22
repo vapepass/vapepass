@@ -5,10 +5,12 @@ import Sidebar from '@/components/Sidebar';
 import Navbar from '@/components/Navbar';
 import AuthGuard from '@/components/AuthGuard';
 import SubscriptionGuard from '@/components/SubscriptionGuard';
+import WelcomeOnboarding from '@/components/onboarding/WelcomeOnboarding';
 import { isRouteTemporarilyHidden } from '@/lib/nav-visibility';
 
 export default function DashboardLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const routeHidden = isRouteTemporarilyHidden(pathname);
@@ -39,7 +41,13 @@ export default function DashboardLayout({ children }) {
               sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
             ].join(' ')}
           >
-            <Sidebar onClose={() => setSidebarOpen(false)} />
+            <Sidebar
+              onClose={() => setSidebarOpen(false)}
+              onNeedHelp={() => {
+                setHelpOpen(true);
+                setSidebarOpen(false);
+              }}
+            />
           </div>
 
           <div className="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -50,6 +58,8 @@ export default function DashboardLayout({ children }) {
               </div>
             </main>
           </div>
+
+          <WelcomeOnboarding helpOpen={helpOpen} onHelpOpenChange={setHelpOpen} />
         </div>
       </SubscriptionGuard>
     </AuthGuard>

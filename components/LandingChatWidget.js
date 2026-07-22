@@ -32,6 +32,16 @@ import {
 } from '@/lib/chat/nlu';
 import TypingIndicator from '@/components/chat/TypingIndicator';
 import ChatMessageList from '@/components/chat/ChatMessageList';
+import ChatLauncherNudge, {
+  LAUNCHER_NUDGE_MESSAGES,
+  LAUNCHER_NUDGE_SESSION_KEY,
+  pickLauncherNudgeMessage,
+} from '@/components/chat/ChatLauncherNudge';
+
+/** Appear after load; stay ~7s; once per browser session after display. */
+const NUDGE_SHOW_DELAY_MS = 1200;
+const NUDGE_VISIBLE_MS = 8000;
+const NUDGE_EXIT_MS = 280;
 
 /** Prefer API reply text; if missing, turn option labels into a soft conversational prompt (no chips). */
 function replyTextFromSession(session) {
@@ -120,6 +130,10 @@ export default function LandingChatWidget({
 
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
+  const [nudgeVisible, setNudgeVisible] = useState(false);
+  const [nudgeExiting, setNudgeExiting] = useState(false);
+  const [nudgeMessage, setNudgeMessage] = useState(LAUNCHER_NUDGE_MESSAGES[0]);
+  const nudgeEnabledRef = useRef(true);
   const [config, setConfig] = useState(null);
   const [sessionKey, setSessionKey] = useState(null);
   const [ageVerified, setAgeVerified] = useState(false);
@@ -168,18 +182,86 @@ export default function LandingChatWidget({
     } else if (open) {
       width = 420;
       height = 720;
+    } else if (nudgeVisible || nudgeExiting) {
+      // Room for the invite bubble above the FAB
+      width = 340;
+      height = 168;
     }
     window.parent.postMessage(
       { source: 'vapepass-assistant', type: 'resize', width, height },
       targetOrigin
     );
-  }, [embedMode, parentOrigin, open, minimized]);
+  }, [embedMode, parentOrigin, open, minimized, nudgeVisible, nudgeExiting]);
 
-  const appendTimeline = useCallback((items) => {
-    setTimeline((prev) => [...prev, ...(Array.isArray(items) ? items : [items])]);
+  // Invite bubble above the FAB (presentation only).
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    try {
+      if (sessionStorage.getItem(LAUNCHER_NUDGE_SESSION_KEY) === '1') {
+        nudgeEnabledRef.current = false;
+        return undefined;
+      }
+    } catch {
+      /* ignore */
+    }
+
+    setNudgeMessage(pickLauncherNudgeMessage());
+
+    const showId = window.setTimeout(() => {
+      if (!nudgeEnabledRef.current) return;
+      setNudgeVisible(true);
+      setNudgeExiting(false);
+    }, NUDGE_SHOW_DELAY_MS);
+
+    return () => window.clearTimeout(showId);
   }, []);
 
   useEffect(() => {
+    if (!nudgeVisible || open) return undefined;
+
+    const hideId = window.setTimeout(() => {
+      setNudgeExiting(true);
+      window.setTimeout(() => {
+        setNudgeVisible(false);
+        setNudgeExiting(false);
+        // Do not mark session on auto-hide — tip can greet again on next visit
+        // until the user opens or dismisses the launcher.
+      }, NUDGE_EXIT_MS);
+    }, NUDGE_VISIBLE_MS);
+
+    return () => window.clearTimeout(hideId);
+  }, [nudgeVisible, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    nudgeEnabledRef.current = false;
+    setNudgeVisible(false);
+    setNudgeExiting(false);
+    try {
+      sessionStorage.setItem(LAUNCHER_NUDGE_SESSION_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+  }, [open]);
+
+  const dismissLauncherNudge = useCallback(() => {
+    nudgeEnabledRef.current = false;
+    setNudgeExiting(true);
+    window.setTimeout(() => {
+      setNudgeVisible(false);
+      setNudgeExiting(false);
+    }, NUDGE_EXIT_MS);
+    try {
+      sessionStorage.setItem(LAUNCHER_NUDGE_SESSION_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const appendTimeline = useCallback((items) => {
+    setTimeline((prev) => [...prev, ...(Array.isArray(items) ? items : [items])]);
+  }, []);  useEffect(() => {
     if (!guidedKey || !bootstrappedRef.current) return;
     try {
       sessionStorage.setItem(
@@ -792,6 +874,14 @@ export default function LandingChatWidget({
   const showComposer = Boolean(sessionKey) && ageVerified && !loading;
 
   const handleOpen = () => {
+    nudgeEnabledRef.current = false;
+    setNudgeVisible(false);
+    setNudgeExiting(false);
+    try {
+      sessionStorage.setItem(LAUNCHER_NUDGE_SESSION_KEY, '1');
+    } catch {
+      /* ignore */
+    }
     setOpen(true);
     setMinimized(false);
   };
@@ -800,6 +890,8 @@ export default function LandingChatWidget({
     setOpen(false);
     setMinimized(false);
   };
+
+  const showLauncherNudge = !open && (nudgeVisible || nudgeExiting);
 
   return (
     <>
@@ -961,10 +1053,25 @@ export default function LandingChatWidget({
         </div>
       )}
 
+      {showLauncherNudge && (
+        <ChatLauncherNudge
+          visible={nudgeVisible}
+          exiting={nudgeExiting}
+          message={nudgeMessage}
+          onOpen={handleOpen}
+          onDismiss={dismissLauncherNudge}
+        />
+      )}
+
       <button
         type="button"
         onClick={() => (open ? handleClose() : handleOpen())}
-        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full chat-widget-header hero-fab flex items-center justify-center text-white transition-all duration-200 hover:scale-105 hover:brightness-110 active:scale-100"
+        className={[
+          'fixed bottom-6 right-6 z-[60] w-14 h-14 rounded-full chat-widget-header hero-fab',
+          'flex items-center justify-center text-white transition-all duration-200',
+          'hover:scale-105 hover:brightness-110 active:scale-100',
+          showLauncherNudge ? 'chat-launcher-fab--pulse' : '',
+        ].join(' ')}
         aria-label={open ? 'Close AI Shopping Assistant' : 'Open AI Shopping Assistant'}
         aria-expanded={open}
       >
