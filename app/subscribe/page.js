@@ -2,12 +2,20 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { CreditCard, CheckCircle2, AlertCircle, Lock } from 'lucide-react';
+import {
+  CreditCard,
+  CheckCircle2,
+  AlertCircle,
+  Lock,
+  Code2,
+  Sparkles,
+} from 'lucide-react';
 import AuthGuard from '@/components/AuthGuard';
-import AuthLayout from '@/components/AuthLayout';
+import SubscribeLayout from '@/components/SubscribeLayout';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import Spinner from '@/components/ui/Spinner';
+import Logo from '@/components/Logo';
 import { useAuth } from '@/context/AuthContext';
 import {
   createCheckoutSession,
@@ -21,6 +29,12 @@ import {
   canAccessDashboard,
 } from '@/lib/subscription';
 import { ApiError } from '@/lib/api';
+
+const PLAN_PERKS = [
+  { icon: Lock, label: 'Dashboard unlock after payment' },
+  { icon: Code2, label: 'Secure embed script for your website' },
+  { icon: Sparkles, label: 'AI flavor recommendations for customers' },
+];
 
 export default function SubscribePage() {
   const router = useRouter();
@@ -145,12 +159,23 @@ export default function SubscribePage() {
 
   const price = billingInfo?.monthlyPrice ?? 99;
 
+  const signOutFooter = (
+    <button
+      type="button"
+      onClick={() => logout('/login')}
+      className="text-sm font-semibold text-brand-600 hover:text-brand-700"
+    >
+      Sign out
+    </button>
+  );
+
   if (checkingStatus) {
     return (
       <AuthGuard>
-        <div className="min-h-screen flex flex-col items-center justify-center gap-3 gradient-mesh px-4">
+        <div className="register-page login-page flex min-h-screen flex-col items-center justify-center gap-4 bg-[#f6f7fb] px-4">
+          <Logo showText variant="sparkle" landing size={40} />
           <Spinner size="lg" />
-          <p className="text-sm text-[#6b7280]">Checking subscription status…</p>
+          <p className="text-sm text-body">Checking subscription status…</p>
         </div>
       </AuthGuard>
     );
@@ -159,22 +184,14 @@ export default function SubscribePage() {
   if (storeError && !store) {
     return (
       <AuthGuard>
-        <AuthLayout
+        <SubscribeLayout
           title="Unable to verify subscription"
           subtitle="We could not load your billing status from the server"
-          footer={
-            <button
-              type="button"
-              onClick={() => logout('/login')}
-              className="text-sm font-semibold text-brand-600 hover:text-brand-700"
-            >
-              Sign out
-            </button>
-          }
+          footer={signOutFooter}
         >
           <div className="space-y-4">
             <p
-              className="text-sm text-danger-600 bg-danger-50 border border-red-200 rounded-xl px-4 py-3 flex items-start gap-2"
+              className="flex items-start gap-2 rounded-xl border border-red-200 bg-danger-50 px-4 py-3 text-sm text-danger-600"
               role="alert"
             >
               <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
@@ -189,75 +206,69 @@ export default function SubscribePage() {
               Retry
             </Button>
           </div>
-        </AuthLayout>
+        </SubscribeLayout>
       </AuthGuard>
     );
   }
 
   return (
     <AuthGuard>
-      <AuthLayout
-        title="Activate your subscription"
-        subtitle="Your dashboard stays locked until billing is active"
-        footer={
-          <button
-            type="button"
-            onClick={() => logout('/login')}
-            className="text-sm font-semibold text-brand-600 hover:text-brand-700"
-          >
-            Sign out
-          </button>
-        }
-      >
+      <SubscribeLayout footer={signOutFooter}>
         <div className="space-y-5">
           {successNote && (
-            <p className="text-sm text-success-700 bg-success-50 border border-green-200 rounded-xl px-4 py-3 flex items-start gap-2">
+            <p className="flex items-start gap-2 rounded-xl border border-green-200 bg-success-50 px-4 py-3 text-sm text-success-700">
               <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0" />
               {successNote}
             </p>
           )}
 
           {error && (
-            <p className="text-sm text-danger-600 bg-danger-50 border border-red-200 rounded-xl px-4 py-3 flex items-start gap-2" role="alert">
+            <p
+              className="flex items-start gap-2 rounded-xl border border-red-200 bg-danger-50 px-4 py-3 text-sm text-danger-600"
+              role="alert"
+            >
               <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
               {error}
             </p>
           )}
 
-          <div className="rounded-2xl border border-line-subtle bg-canvas p-5 space-y-4">
+          <div className="space-y-4 rounded-2xl border border-brand-100 bg-gradient-to-br from-brand-50/80 via-white to-violet-50/40 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs uppercase tracking-wider text-muted mb-1">Store</p>
-                <p className="font-semibold text-ink">{store?.name || 'Your store'}</p>
-                <p className="text-sm text-muted mt-1">{user?.email}</p>
+              <div className="min-w-0">
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-600">
+                  Store
+                </p>
+                <p className="truncate font-display text-lg font-semibold tracking-tight text-ink">
+                  {store?.name || 'Your store'}
+                </p>
+                <p className="mt-1 truncate text-sm text-muted">{user?.email}</p>
               </div>
               <Badge variant={active ? 'success' : status === 'paused' ? 'danger' : 'warning'}>
                 {getSubscriptionStatusLabel(status)}
               </Badge>
             </div>
 
-            <div className="rounded-xl bg-white border border-line-subtle p-4">
+            <div className="rounded-xl border border-line-subtle bg-white p-4 shadow-sm">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center">
-                  <CreditCard size={18} className="text-brand-600" />
+                <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl gradient-brand text-white shadow-brand">
+                  <CreditCard size={18} aria-hidden="true" />
                 </div>
                 <div>
-                  <p className="font-semibold text-ink">VapePass Pro</p>
+                  <p className="font-display font-semibold tracking-tight text-ink">VapePass Pro</p>
                   <p className="text-sm text-muted">${price}/month · recurring billing</p>
                 </div>
               </div>
             </div>
 
-            <ul className="space-y-2 text-sm text-muted">
-              <li className="flex items-center gap-2">
-                <Lock size={14} className="text-brand-600" /> Dashboard unlock after payment
-              </li>
-              <li className="flex items-center gap-2">
-                <Lock size={14} className="text-brand-600" /> Secure embed script for your website
-              </li>
-              <li className="flex items-center gap-2">
-                <Lock size={14} className="text-brand-600" /> AI flavor recommendations for customers
-              </li>
+            <ul className="space-y-2.5">
+              {PLAN_PERKS.map(({ icon: Icon, label }) => (
+                <li key={label} className="flex items-center gap-2.5 text-sm text-body">
+                  <span className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                    <Icon size={14} aria-hidden="true" />
+                  </span>
+                  {label}
+                </li>
+              ))}
             </ul>
           </div>
 
@@ -272,7 +283,7 @@ export default function SubscribePage() {
               onClick={startCheckout}
               disabled={loading || confirming}
               variant={billingFlag === 'success' ? 'secondary' : 'primary'}
-              className="w-full"
+              className="w-full shadow-brand"
             >
               {loading ? 'Redirecting…' : billingFlag === 'success' ? 'Retry checkout' : `Subscribe — $${price}/mo`}
             </Button>
@@ -284,7 +295,7 @@ export default function SubscribePage() {
             </Button>
           )}
         </div>
-      </AuthLayout>
+      </SubscribeLayout>
     </AuthGuard>
   );
 }
