@@ -74,8 +74,10 @@ export default function AssistantPage() {
   const [products, setProducts] = useState([]);
   const [productPageUrl, setProductPageUrlInput] = useState('');
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState(false);
+  /** Independent loading: Save & Scrape vs Refresh Inventory */
+  const [initialScraping, setInitialScraping] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [savingUrlOnly, setSavingUrlOnly] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [copied, setCopied] = useState(false);
   const [togglingId, setTogglingId] = useState(null);
@@ -84,6 +86,8 @@ export default function AssistantPage() {
   const pollGenerationRef = useRef(0);
   const mountedRef = useRef(true);
   const resumeStartedRef = useRef(false);
+  /** 'initial' | 'refresh' — which button started the in-flight scrape */
+  const syncModeRef = useRef(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -188,22 +192,80 @@ export default function AssistantPage() {
     if (loading || resumeStartedRef.current) return;
     if (!isActiveSyncStatus(status?.inventorySyncStatus)) return;
     resumeStartedRef.current = true;
-    setSyncing(true);
+
+    const storedMode =
+      typeof window !== 'undefined'
+        ? sessionStorage.getItem('vapepass_inventory_sync_mode')
+        : null;
+    const mode = storedMode === 'initial' || storedMode === 'refresh' ? storedMode : 'refresh';
+    syncModeRef.current = mode;
+    if (mode === 'initial') setInitialScraping(true);
+    else setRefreshing(true);
+
     (async () => {
       try {
         await pollUntilSyncComplete({ showToast: true });
       } finally {
-        if (mountedRef.current) setSyncing(false);
+        if (mountedRef.current) {
+          setInitialScraping(false);
+          setRefreshing(false);
+          syncModeRef.current = null;
+          try {
+            sessionStorage.removeItem('vapepass_inventory_sync_mode');
+          } catch {
+            /* ignore */
+          }
+        }
       }
     })();
   }, [loading, status?.inventorySyncStatus, pollUntilSyncComplete]);
 
+  const clearSyncMode = () => {
+    syncModeRef.current = null;
+    try {
+      sessionStorage.removeItem('vapepass_inventory_sync_mode');
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const markSyncMode = (mode) => {
+    syncModeRef.current = mode;
+    try {
+      sessionStorage.setItem('vapepass_inventory_sync_mode', mode);
+    } catch {
+      /* ignore */
+    }
+  };
+
   const saveUrl = async (e) => {
     e.preventDefault();
-    setSaving(true);
-    setSyncing(true);
+    const url = productPageUrl.trim();
+    if (!url) return;
+
+    const initialDone = Boolean(status?.inventoryInitialSyncedAt);
+
+    // After the one-time scrape, only persist URL changes (no re-scrape)
+    if (initialDone) {
+      setSavingUrlOnly(true);
+      try {
+        const data = await setProductPageUrl(url, false);
+        const nextStatus = data.status || null;
+        setStatus((prev) => ({ ...(prev || {}), ...(nextStatus || {}) }));
+        toast('Store URL saved', 'success');
+      } catch (err) {
+        toast(err instanceof ApiError ? err.message : 'Failed to save store URL', 'error');
+        await load();
+      } finally {
+        if (mountedRef.current) setSavingUrlOnly(false);
+      }
+      return;
+    }
+
+    markSyncMode('initial');
+    setInitialScraping(true);
     try {
-      const data = await setProductPageUrl(productPageUrl.trim(), true);
+      const data = await setProductPageUrl(url, true);
       const nextStatus = data.status || null;
       setStatus((prev) => ({
         ...(prev || {}),
@@ -217,15 +279,21 @@ export default function AssistantPage() {
       await load();
     } finally {
       if (mountedRef.current) {
-        setSaving(false);
-        setSyncing(false);
+        setInitialScraping(false);
+        clearSyncMode();
       }
     }
   };
 
   const runSync = async () => {
-    setSyncing(true);
+    markSyncMode('refresh');
+    setRefreshing(true);
     try {
+      const url = productPageUrl.trim();
+      if (url && url !== (status?.productPageUrl || '')) {
+        await setProductPageUrl(url, false);
+      }
+
       const data = await syncInventory();
       const nextStatus = data.status || data;
       setStatus((prev) => ({
@@ -244,7 +312,10 @@ export default function AssistantPage() {
       toast(err instanceof ApiError ? err.message : 'Inventory refresh failed', 'error');
       await load();
     } finally {
-      if (mountedRef.current) setSyncing(false);
+      if (mountedRef.current) {
+        setRefreshing(false);
+        clearSyncMode();
+      }
     }
   };
 
@@ -263,7 +334,9 @@ export default function AssistantPage() {
     } finally {
       if (mountedRef.current) {
         setStopping(false);
-        setSyncing(false);
+        setInitialScraping(false);
+        setRefreshing(false);
+        clearSyncMode();
       }
     }
   };
@@ -328,7 +401,15 @@ export default function AssistantPage() {
     );
   }
 
-  const isSyncing = syncing || saving || isActiveSyncStatus(status?.inventorySyncStatus);
+  const initialScrapeDone = Boolean(status?.inventoryInitialSyncedAt);
+  const serverSyncing = isActiveSyncStatus(status?.inventorySyncStatus);
+  const anySyncBusy = initialScraping || refreshing || serverSyncing;
+  const refreshRemaining = status?.inventoryRefresh?.remaining ?? 0;
+  const refreshLimitReached = initialScrapeDone && refreshRemaining <= 0;
+  const urlDirty =
+    productPageUrl.trim() !== '' &&
+    productPageUrl.trim() !== (status?.productPageUrl || '');
+
   const syncBadgeLabel =
     status?.inventorySyncStatus === 'success'
       ? 'Completed'
@@ -336,7 +417,7 @@ export default function AssistantPage() {
         ? 'Stopped'
         : status?.inventorySyncStatus === 'error'
           ? 'Failed'
-          : isActiveSyncStatus(status?.inventorySyncStatus)
+          : serverSyncing
             ? 'Scraping…'
             : status?.inventorySyncStatus || 'idle';
 
@@ -377,33 +458,67 @@ export default function AssistantPage() {
                   onChange={(e) => setProductPageUrlInput(e.target.value)}
                   placeholder="https://yourstore.com"
                   required
-                  disabled={isSyncing}
+                  disabled={anySyncBusy || savingUrlOnly}
                 />
               </FormField>
 
               <div className="flex flex-wrap gap-3 items-center">
-                <Button type="submit" disabled={saving || !productPageUrl.trim() || isSyncing}>
-                  {isSyncing
-                    ? 'Scraping…'
-                    : status?.inventorySyncStatus === 'success'
-                      ? 'Save & Re-scrape'
-                      : 'Save & Scrape Inventory'}
-                </Button>
+                {initialScrapeDone ? (
+                  <>
+                    <Button type="button" disabled title="Initial inventory import is complete">
+                      Initial scrape complete
+                    </Button>
+                    {urlDirty && (
+                      <Button
+                        type="submit"
+                        variant="secondary"
+                        disabled={savingUrlOnly || anySyncBusy}
+                      >
+                        {savingUrlOnly ? 'Saving URL…' : 'Save URL'}
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <Button
+                    type="submit"
+                    disabled={initialScraping || refreshing || !productPageUrl.trim() || serverSyncing}
+                  >
+                    {initialScraping ? (
+                      <>
+                        <RefreshCw size={15} className="animate-spin" />
+                        Scraping…
+                      </>
+                    ) : (
+                      'Save & Scrape Inventory'
+                    )}
+                  </Button>
+                )}
+
                 <Button
                   type="button"
                   variant="secondary"
                   onClick={runSync}
                   disabled={
-                    !status?.productPageUrl ||
-                    isSyncing ||
-                    (Boolean(status?.inventoryInitialSyncedAt) &&
-                      (status?.inventoryRefresh?.remaining ?? 1) <= 0)
+                    !productPageUrl.trim() ||
+                    initialScraping ||
+                    refreshing ||
+                    serverSyncing ||
+                    refreshLimitReached ||
+                    !initialScrapeDone
+                  }
+                  title={
+                    !initialScrapeDone
+                      ? 'Run Save & Scrape Inventory first'
+                      : refreshLimitReached
+                        ? 'Monthly refresh limit reached'
+                        : undefined
                   }
                 >
-                  <RefreshCw size={15} className={isSyncing ? 'animate-spin' : ''} />
-                  {isSyncing ? 'Refreshing…' : 'Refresh Inventory'}
+                  <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
+                  {refreshing ? 'Refreshing…' : 'Refresh Inventory'}
                 </Button>
-                {isSyncing && (
+
+                {anySyncBusy && (
                   <Button
                     type="button"
                     variant="danger"
@@ -414,16 +529,20 @@ export default function AssistantPage() {
                     {stopping ? 'Stopping…' : 'Force Stop'}
                   </Button>
                 )}
+
                 {status?.inventoryRefresh?.label && (
                   <p className="text-sm text-muted w-full sm:w-auto">
                     {status.inventoryRefresh.label}
-                    {(status?.inventoryRefresh?.remaining ?? 1) <= 0 &&
-                    status?.inventoryInitialSyncedAt
-                      ? ' — limit reached for this month'
-                      : ''}
+                    {refreshLimitReached ? ' — limit reached for this month' : ''}
                   </p>
                 )}
               </div>
+
+              {initialScrapeDone && (
+                <p className="text-xs text-muted">
+                  Initial import is done. Use Refresh Inventory for updates (2 per month).
+                </p>
+              )}
 
               {status?.recommendationTaxonomyStatus && (
                 <p className="text-xs text-muted">
@@ -499,7 +618,7 @@ export default function AssistantPage() {
             <div className="flex flex-wrap gap-3">
               <Button
                 onClick={finishSetup}
-                disabled={goingLive || status?.isLive || !status?.canGoLive || isSyncing}
+                disabled={goingLive || status?.isLive || !status?.canGoLive || anySyncBusy}
               >
                 <Rocket size={15} />
                 {goingLive
@@ -536,7 +655,7 @@ export default function AssistantPage() {
             </div>
 
             {products.length === 0 ? (
-              isSyncing ? (
+              anySyncBusy ? (
                 <InventoryTableSkeleton rows={5} />
               ) : (
                 <p className="text-sm text-body">
@@ -667,7 +786,7 @@ export default function AssistantPage() {
                     status?.inventoryProductCount ?? 0,
                     products.filter((p) => p.isActive !== false).length
                   )}
-                  {isSyncing ? (
+                  {anySyncBusy ? (
                     <span className="ml-1 text-xs font-medium text-brand-600">live</span>
                   ) : null}
                 </p>
